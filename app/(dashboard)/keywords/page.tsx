@@ -11,10 +11,10 @@ type HotlistResult = {
 };
 
 const titleMap: Record<string, string> = {
-  "now%201%2Bd": "24 小时上升关键词",
-  "now%207-d": "7 天上升关键词",
-  past_7_days: "过去 7 天上升关键词",
-  past_30_days: "过去 30 天上升关键词",
+  "now%201%2Bd": "24 小时新词",
+  "now%207-d": "7 天新词",
+  past_7_days: "过去 7 天新词",
+  past_30_days: "过去 30 天新词",
 };
 
 const KeywordsPage = async () => {
@@ -43,8 +43,8 @@ const KeywordsPage = async () => {
             <CardTitle>筛选条件</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm text-white/60 md:grid-cols-2">
-            <p>后续版本将提供时间范围、地区、最低比值等动态筛选控件。</p>
-            <p>使用 Supabase 保存筛选方案和集合，支撑编辑团队的工作流程。</p>
+            <p>当前列表固定展示最近 72 小时内首次出现的新词，24 小时内冒头的词会获得红色优先级标签。</p>
+            <p>后续版本将开放更多筛选条件并支持将高优先级词保存到自定义集合。</p>
           </CardContent>
         </Card>
       </section>

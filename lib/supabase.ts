@@ -1,7 +1,8 @@
 import "@/lib/server-proxy";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/supabase";
+import type { Database, Json } from "@/types/supabase";
 import { env } from "./env";
+import { NEW_KEYWORD_MAX_AGE_MS } from "@/lib/trends/constants";
 
 type SupabaseAdminClient = SupabaseClient<Database>;
 
@@ -32,26 +33,22 @@ export type TrendRunRow = Database["public"]["Tables"]["ai_trends_runs"]["Row"];
 export type TrendRunInsert = Database["public"]["Tables"]["ai_trends_runs"]["Insert"];
 export type TrendRunUpdate = Database["public"]["Tables"]["ai_trends_runs"]["Update"];
 
-export const getLatestKeywords = async (params: {
-  timeframe?: string;
-  limit?: number;
-  minRatio?: number;
-}) => {
+export const getLatestKeywords = async (params: { timeframe?: string; limit?: number }) => {
   const client = getSupabaseAdmin();
-  const { timeframe, limit = 50, minRatio } = params;
+  const { timeframe, limit = 50 } = params;
+  const recentThresholdIso = new Date(Date.now() - NEW_KEYWORD_MAX_AGE_MS).toISOString();
 
   let query = client
     .from("ai_trends_keywords")
     .select("*")
-    .order("latest_ratio", { ascending: false })
+    .gte("first_seen", recentThresholdIso)
+    .order("priority", { ascending: true })
+    .order("spike_score", { ascending: false })
+    .order("first_seen", { ascending: false })
     .limit(limit);
 
   if (timeframe) {
     query = query.eq("timeframe", timeframe);
-  }
-
-  if (typeof minRatio === "number") {
-    query = query.gte("latest_ratio", minRatio);
   }
 
   const { data, error } = await query;
@@ -121,7 +118,7 @@ export const createRoot = async (record: TrendRootInsert): Promise<TrendRootRow>
   };
 
   const { data, error } = await client
-    .from<TrendRootRow>("ai_trends_roots")
+    .from("ai_trends_roots")
     // @ts-ignore Supabase typings expect an array payload; single object works at runtime
     .insert(payload as TrendRootInsert)
     .select("*")
@@ -155,7 +152,7 @@ export const updateRootById = async (id: string, updates: TrendRootUpdate): Prom
   }
 
   const { data, error } = await client
-    .from<TrendRootRow>("ai_trends_roots")
+    .from("ai_trends_roots")
     // @ts-ignore Supabase typings expect an array payload; single object works at runtime
     .update(payload as TrendRootUpdate)
     .eq("id", id)
@@ -195,7 +192,7 @@ export const createTrendRun = async (record: TrendRunInsert): Promise<TrendRunRo
   };
 
   const { data, error } = await client
-    .from<TrendRunRow>("ai_trends_runs")
+    .from("ai_trends_runs")
     // @ts-ignore Supabase typings expect an array payload; single object works at runtime
     .insert(payload as TrendRunInsert)
     .select("*")
@@ -216,7 +213,7 @@ export const updateTrendRunById = async (id: string, updates: TrendRunUpdate): P
   };
 
   const { data, error } = await client
-    .from<TrendRunRow>("ai_trends_runs")
+    .from("ai_trends_runs")
     // @ts-ignore Supabase typings expect an array payload; single object works at runtime
     .update(payload as TrendRunUpdate)
     .eq("id", id)
@@ -233,7 +230,7 @@ export const updateTrendRunById = async (id: string, updates: TrendRunUpdate): P
 export const getTrendRunById = async (id: string): Promise<TrendRunRow | null> => {
   const client = getSupabaseAdmin();
   const { data, error } = await client
-    .from<TrendRunRow>("ai_trends_runs")
+    .from("ai_trends_runs")
     .select("*")
     .eq("id", id)
     .maybeSingle();
@@ -250,7 +247,7 @@ export const getRunTaskStatusCounts = async (
 ): Promise<{ total: number; completed: number; queued: number; error: number }> => {
   const client = getSupabaseAdmin();
   const { data, error } = await client
-    .from<TrendsTaskRow>("ai_trends_tasks")
+    .from("ai_trends_tasks")
     .select("status")
     .eq("run_id", runId);
 
@@ -258,7 +255,7 @@ export const getRunTaskStatusCounts = async (
     throw error;
   }
 
-  const rows = data ?? [];
+  const rows = (data ?? []) as TrendsTaskRow[];
   const counts = {
     total: rows.length,
     completed: 0,
@@ -286,7 +283,7 @@ export const getRunTaskStatusCounts = async (
 export const listTrendRuns = async (limit = 20): Promise<TrendRunRow[]> => {
   const client = getSupabaseAdmin();
   const { data, error } = await client
-    .from<TrendRunRow>("ai_trends_runs")
+    .from("ai_trends_runs")
     .select("*")
     .order("triggered_at", { ascending: false })
     .limit(limit);
@@ -301,7 +298,7 @@ export const listTrendRuns = async (limit = 20): Promise<TrendRunRow[]> => {
 export const getTasksByRunId = async (runId: string): Promise<TrendsTaskRow[]> => {
   const client = getSupabaseAdmin();
   const { data, error } = await client
-    .from<TrendsTaskRow>("ai_trends_tasks")
+    .from("ai_trends_tasks")
     .select("*")
     .eq("run_id", runId)
     .order("posted_at", { ascending: true });
@@ -316,7 +313,7 @@ export const getTasksByRunId = async (runId: string): Promise<TrendsTaskRow[]> =
 export const getRunTaskCostTotal = async (runId: string): Promise<number> => {
   const client = getSupabaseAdmin();
   const { data, error } = await client
-    .from<TrendsTaskRow>("ai_trends_tasks")
+    .from("ai_trends_tasks")
     .select("cost")
     .eq("run_id", runId);
 
@@ -324,7 +321,7 @@ export const getRunTaskCostTotal = async (runId: string): Promise<number> => {
     throw error;
   }
 
-  const rows = data ?? [];
+  const rows = (data ?? []) as TrendsTaskRow[];
   return rows.reduce((accumulator, row) => {
     const cost = typeof row?.cost === "number" ? Number(row.cost) : 0;
     return accumulator + (Number.isFinite(cost) ? cost : 0);
@@ -381,7 +378,10 @@ export const insertTrendTasks = async (records: TrendsTaskInsert[]) => {
   }
 
   const client = getSupabaseAdmin();
-  const { data, error } = await client.from("ai_trends_tasks").insert(records).select("*");
+  const payload = records as Database["public"]["Tables"]["ai_trends_tasks"]["Insert"][];
+  const { data, error } = await (client.from("ai_trends_tasks") as any)
+    .insert(payload as any)
+    .select("*");
 
   if (error) {
     throw error;
@@ -392,9 +392,8 @@ export const insertTrendTasks = async (records: TrendsTaskInsert[]) => {
 
 export const updateTrendTask = async (taskId: string, updates: TrendsTaskUpdate) => {
   const client = getSupabaseAdmin();
-  const { data, error } = await client
-    .from("ai_trends_tasks")
-    .update(updates)
+  const { data, error } = await (client.from("ai_trends_tasks") as any)
+    .update(updates as any)
     .eq("task_id", taskId)
     .select("*")
     .maybeSingle();
@@ -425,23 +424,117 @@ export const upsertTrendKeyword = async (
   record: Partial<TrendKeywordRow> & Pick<TrendKeywordRow, "keyword" | "locale" | "timeframe">
 ) => {
   const client = getSupabaseAdmin();
-  const payload = {
-    is_brand: false,
-    demand_category: null,
-    summary: record.summary ?? null,
-    news_refs: record.news_refs ?? null,
-    metadata: record.metadata ?? {},
-    coverage_countries: record.coverage_countries ?? null,
-    ...record,
-    updated_at: new Date().toISOString(),
-    first_seen: record.first_seen ?? new Date().toISOString(),
-    last_seen: record.last_seen ?? new Date().toISOString(),
-  } satisfies Database["public"]["Tables"]["ai_trends_keywords"]["Insert"];
+  const nowIso = new Date().toISOString();
+  const trimOrFallback = (value: string | undefined) => (typeof value === "string" ? value.trim() : undefined);
 
+  const payload: Database["public"]["Tables"]["ai_trends_keywords"]["Insert"] = {
+    keyword: trimOrFallback(record.keyword) ?? record.keyword,
+    locale: trimOrFallback(record.locale) ?? record.locale,
+    timeframe: trimOrFallback(record.timeframe) ?? record.timeframe,
+    first_seen: record.first_seen ?? nowIso,
+    last_seen: record.last_seen ?? nowIso,
+    is_brand: record.is_brand ?? false,
+    metadata: record.metadata ?? {},
+    updated_at: record.updated_at ?? nowIso,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(record, "demand_category")) {
+    payload.demand_category = record.demand_category ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, "spike_score")) {
+    payload.spike_score = record.spike_score ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, "priority")) {
+    payload.priority = record.priority ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, "summary")) {
+    payload.summary = record.summary ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, "news_refs")) {
+    payload.news_refs = record.news_refs ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(record, "created_at")) {
+    payload.created_at = record.created_at ?? nowIso;
+  }
+
+  const keywordsTable = client.from("ai_trends_keywords") as any;
+
+  const attemptUpsert = async (onConflict: string) =>
+    keywordsTable.upsert(payload as any, { onConflict }).select("*").maybeSingle();
+
+  const attemptCaseInsensitiveMerge = async () => {
+    const existing = await (client.from("ai_trends_keywords") as any)
+      .select("*")
+      .eq("locale", payload.locale)
+      .eq("timeframe", payload.timeframe)
+      .ilike("keyword", payload.keyword)
+      .maybeSingle();
+
+    if (existing.error) {
+      return existing;
+    }
+
+    if (existing.data) {
+      const updatePayload: Database["public"]["Tables"]["ai_trends_keywords"]["Update"] = {
+        ...payload,
+        first_seen: existing.data.first_seen,
+        created_at: existing.data.created_at,
+      };
+
+      return (client.from("ai_trends_keywords") as any)
+        .update(updatePayload as any)
+        .eq("id", existing.data.id)
+        .select("*")
+        .maybeSingle();
+    }
+
+    return (client.from("ai_trends_keywords") as any)
+      .insert(payload as any)
+      .select("*")
+      .maybeSingle();
+  };
+
+  const conflictTargets = ["keyword,locale,timeframe", "keyword,locale"];
+
+  let response = await attemptUpsert(conflictTargets[0]);
+
+  if (response.error && response.error.code === "42P10" && conflictTargets.length > 1) {
+    for (let index = 1; index < conflictTargets.length; index += 1) {
+      response = await attemptUpsert(conflictTargets[index]);
+      if (!response.error || response.error.code !== "42P10") {
+        break;
+      }
+    }
+  }
+
+  if (response.error && response.error.code === "42P10") {
+    response = await attemptCaseInsensitiveMerge();
+  }
+
+  if (response.error) {
+    throw response.error;
+  }
+
+  return response.data ?? null;
+};
+
+export const getTrendKeywordByKey = async (
+  keyword: string,
+  locale: string,
+  timeframe: string
+): Promise<TrendKeywordRow | null> => {
+  const client = getSupabaseAdmin();
   const { data, error } = await client
     .from("ai_trends_keywords")
-    .upsert(payload, { onConflict: "keyword,locale,timeframe" })
     .select("*")
+    .eq("keyword", keyword)
+    .eq("locale", locale)
+    .eq("timeframe", timeframe)
     .maybeSingle();
 
   if (error) {
@@ -455,7 +548,10 @@ export const insertTrendSnapshot = async (
   record: Database["public"]["Tables"]["ai_trends_snapshots"]["Insert"]
 ) => {
   const client = getSupabaseAdmin();
-  const { data, error } = await client.from("ai_trends_snapshots").insert(record).select("*").maybeSingle();
+  const { data, error } = await (client.from("ai_trends_snapshots") as any)
+    .insert(record as any)
+    .select("*")
+    .maybeSingle();
 
   if (error) {
     throw error;
@@ -469,9 +565,8 @@ export const insertTrendEvent = async (
   payload: unknown
 ): Promise<Database["public"]["Tables"]["ai_trends_events"]["Row"] | null> => {
   const client = getSupabaseAdmin();
-  const { data, error } = await client
-    .from<Database["public"]["Tables"]["ai_trends_events"]["Row"]>("ai_trends_events")
-    .insert({ event_type: eventType, payload } as Database["public"]["Tables"]["ai_trends_events"]["Insert"])
+  const { data, error } = await (client.from("ai_trends_events") as any)
+    .insert({ event_type: eventType, payload } as any)
     .select("*")
     .maybeSingle();
 

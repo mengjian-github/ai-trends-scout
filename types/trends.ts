@@ -26,7 +26,8 @@ export type OverviewPayload = {
     id: string;
     keyword: string;
     locale: string;
-    ratio: number;
+    priority: string | null;
+    spike_score: number | null;
     triggeredAt: string;
   }>;
 };
@@ -36,7 +37,6 @@ export type KeywordDetailPayload = {
   snapshots: Array<{
     collected_at: string;
     trend_score: number | null;
-    baseline_ratio: number | null;
   }>;
   related_news: Array<{
     id: string;

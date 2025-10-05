@@ -191,31 +191,33 @@ const parseGraphPoints = (value: unknown): ExploreGraphPoint[] => {
     return [];
   }
 
-  return value
-    .map((item) => {
-      if (!isObject(item)) {
-        return undefined;
-      }
+  const points: ExploreGraphPoint[] = [];
 
-      const dateFrom = toStringOrUndefined(item.date_from);
-      const dateTo = toStringOrUndefined(item.date_to);
-      const timestamp = toUnixSeconds(item.timestamp ?? dateFrom ?? dateTo);
-      const values = extractNumericValues(item.values);
-      const valueNumber = averageNumbers(values);
+  for (const entry of value) {
+    if (!isObject(entry)) {
+      continue;
+    }
 
-      if (timestamp === undefined || valueNumber === undefined) {
-        return undefined;
-      }
+    const dateFrom = toStringOrUndefined(entry.date_from);
+    const dateTo = toStringOrUndefined(entry.date_to);
+    const timestamp = toUnixSeconds(entry.timestamp ?? dateFrom ?? dateTo);
+    const values = extractNumericValues(entry.values);
+    const valueNumber = averageNumbers(values);
 
-      return {
-        timestamp,
-        value: valueNumber,
-        dateFrom,
-        dateTo,
-        missing: toBoolean(item.missing_data),
-      } satisfies ExploreGraphPoint;
-    })
-    .filter((point): point is ExploreGraphPoint => Boolean(point));
+    if (timestamp === undefined || valueNumber === undefined) {
+      continue;
+    }
+
+    points.push({
+      timestamp,
+      value: valueNumber,
+      dateFrom,
+      dateTo,
+      missing: toBoolean(entry.missing_data),
+    });
+  }
+
+  return points;
 };
 
 const parseGraphAverages = (value: unknown): Record<string, number | undefined> => {
@@ -242,28 +244,30 @@ const parseMapEntries = (value: unknown): ExploreMapEntry[] => {
     return [];
   }
 
-  return value
-    .map((item) => {
-      if (!isObject(item)) {
-        return undefined;
-      }
+  const entries: ExploreMapEntry[] = [];
 
-      const values = extractNumericValues(item.values);
-      const geoId = toStringOrUndefined(item.geo_id);
-      const geoName = toStringOrUndefined(item.geo_name);
+  for (const item of value) {
+    if (!isObject(item)) {
+      continue;
+    }
 
-      if (!geoId && !geoName && values.length === 0) {
-        return undefined;
-      }
+    const values = extractNumericValues(item.values);
+    const geoId = toStringOrUndefined(item.geo_id);
+    const geoName = toStringOrUndefined(item.geo_name);
 
-      return {
-        geoId,
-        geoName,
-        value: averageNumbers(values),
-        maxValueIndex: toNumberOrUndefined(item.max_value_index),
-      } satisfies ExploreMapEntry;
-    })
-    .filter((entry): entry is ExploreMapEntry => Boolean(entry));
+    if (!geoId && !geoName && values.length === 0) {
+      continue;
+    }
+
+    entries.push({
+      geoId,
+      geoName,
+      value: averageNumbers(values),
+      maxValueIndex: toNumberOrUndefined(item.max_value_index),
+    });
+  }
+
+  return entries;
 };
 
 const parseTopicEntries = (value: unknown): ExploreRankedTopic[] => {
@@ -271,29 +275,31 @@ const parseTopicEntries = (value: unknown): ExploreRankedTopic[] => {
     return [];
   }
 
-  return value
-    .map((item) => {
-      if (!isObject(item)) {
-        return undefined;
-      }
+  const topics: ExploreRankedTopic[] = [];
 
-      const title = toStringOrUndefined(item.topic_title ?? item.title);
-      const type = toStringOrUndefined(item.topic_type ?? item.type);
-      const topicId = toStringOrUndefined(item.topic_id);
-      const valueNumber = averageNumbers(extractNumericValues(item.value));
+  for (const item of value) {
+    if (!isObject(item)) {
+      continue;
+    }
 
-      if (!title && valueNumber === undefined) {
-        return undefined;
-      }
+    const title = toStringOrUndefined(item.topic_title ?? item.title);
+    const type = toStringOrUndefined(item.topic_type ?? item.type);
+    const topicId = toStringOrUndefined(item.topic_id);
+    const valueNumber = averageNumbers(extractNumericValues(item.value));
 
-      return {
-        id: topicId,
-        title: title ?? type,
-        type: type,
-        value: valueNumber,
-      } satisfies ExploreRankedTopic;
-    })
-    .filter((entry): entry is ExploreRankedTopic => Boolean(entry));
+    if (!title && valueNumber === undefined) {
+      continue;
+    }
+
+    topics.push({
+      id: topicId,
+      title: title ?? type,
+      type,
+      value: valueNumber,
+    });
+  }
+
+  return topics;
 };
 
 const parseQueryEntries = (value: unknown): ExploreRankedQuery[] => {
@@ -301,25 +307,27 @@ const parseQueryEntries = (value: unknown): ExploreRankedQuery[] => {
     return [];
   }
 
-  return value
-    .map((item) => {
-      if (!isObject(item)) {
-        return undefined;
-      }
+  const queries: ExploreRankedQuery[] = [];
 
-      const query = toStringOrUndefined(item.query ?? item.keyword ?? item.term);
-      const valueNumber = averageNumbers(extractNumericValues(item.value));
+  for (const item of value) {
+    if (!isObject(item)) {
+      continue;
+    }
 
-      if (!query && valueNumber === undefined) {
-        return undefined;
-      }
+    const query = toStringOrUndefined(item.query ?? item.keyword ?? item.term);
+    const valueNumber = averageNumbers(extractNumericValues(item.value));
 
-      return {
-        query: query ?? undefined,
-        value: valueNumber,
-      } satisfies ExploreRankedQuery;
-    })
-    .filter((entry): entry is ExploreRankedQuery => Boolean(entry));
+    if (!query && valueNumber === undefined) {
+      continue;
+    }
+
+    queries.push({
+      query: query ?? undefined,
+      value: valueNumber,
+    });
+  }
+
+  return queries;
 };
 
 const parseExploreItem = (value: unknown): ExploreItem => {
@@ -335,7 +343,6 @@ const parseExploreItem = (value: unknown): ExploreItem => {
   const title = toStringOrUndefined(value.title);
   const position = toNumberOrUndefined(value.position);
   const keywords = toStringArray(value.keywords);
-
   if (type === "google_trends_graph") {
     return {
       type,
@@ -358,24 +365,32 @@ const parseExploreItem = (value: unknown): ExploreItem => {
   }
 
   if (type === "google_trends_topics_list") {
+    const topicsData = isObject(value.data)
+      ? (value.data as { top?: unknown; rising?: unknown })
+      : {};
+
     return {
       type,
       title,
       position,
       keywords,
-      top: parseTopicEntries(value.data?.top),
-      rising: parseTopicEntries(value.data?.rising),
+      top: parseTopicEntries(topicsData.top),
+      rising: parseTopicEntries(topicsData.rising),
     };
   }
 
   if (type === "google_trends_queries_list") {
+    const queriesData = isObject(value.data)
+      ? (value.data as { top?: unknown; rising?: unknown })
+      : {};
+
     return {
       type,
       title,
       position,
       keywords,
-      top: parseQueryEntries(value.data?.top),
-      rising: parseQueryEntries(value.data?.rising),
+      top: parseQueryEntries(queriesData.top),
+      rising: parseQueryEntries(queriesData.rising),
     };
   }
 

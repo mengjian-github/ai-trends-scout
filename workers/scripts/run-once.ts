@@ -39,18 +39,10 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const env = {
-  SUPABASE_URL: process.env.SUPABASE_URL!,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL!,
-  UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN!,
-  DATAFORSEO_LOGIN: process.env.DATAFORSEO_LOGIN!,
-  DATAFORSEO_PASSWORD: process.env.DATAFORSEO_PASSWORD!,
-  DATAFORSEO_BASE_URL: process.env.DATAFORSEO_BASE_URL,
-  AI_TRENDS_DEVELOPED_MARKETS: process.env.AI_TRENDS_DEVELOPED_MARKETS,
-  AI_TRENDS_TIMEFRAMES: process.env.AI_TRENDS_TIMEFRAMES,
-  BASELINE_KEYWORD: process.env.AI_TRENDS_BASELINE_KEYWORD ?? process.env.BASELINE_KEYWORD,
-} satisfies Parameters<typeof handleSync>[0];
+const env: Parameters<typeof handleSync>[0] = {
+  VERCEL_SYNC_URL: process.env.VERCEL_SYNC_URL ?? "",
+  VERCEL_SYNC_TOKEN: process.env.VERCEL_SYNC_TOKEN,
+};
 
 (async () => {
   try {

@@ -46,10 +46,8 @@ export type Database = {
           timeframe: string;
           demand_category: string | null;
           is_brand: boolean;
-          latest_score: number | null;
-          latest_ratio: number | null;
-          momentum: number | null;
-          coverage_countries: string[] | null;
+          spike_score: number | null;
+          priority: string | null;
           first_seen: string;
           last_seen: string;
           summary: string | null;
@@ -65,10 +63,8 @@ export type Database = {
           timeframe: string;
           demand_category?: string | null;
           is_brand?: boolean;
-          latest_score?: number | null;
-          latest_ratio?: number | null;
-          momentum?: number | null;
-          coverage_countries?: string[] | null;
+          spike_score?: number | null;
+          priority?: string | null;
           first_seen: string;
           last_seen: string;
           summary?: string | null;
@@ -84,10 +80,8 @@ export type Database = {
           timeframe?: string;
           demand_category?: string | null;
           is_brand?: boolean;
-          latest_score?: number | null;
-          latest_ratio?: number | null;
-          momentum?: number | null;
-          coverage_countries?: string[] | null;
+          spike_score?: number | null;
+          priority?: string | null;
           first_seen?: string;
           last_seen?: string;
           summary?: string | null;
@@ -103,7 +97,6 @@ export type Database = {
           keyword_id: string;
           collected_at: string;
           trend_score: number | null;
-          baseline_ratio: number | null;
           related_queries: Json | null;
           series: Json | null;
           created_at: string;
@@ -113,7 +106,6 @@ export type Database = {
           keyword_id: string;
           collected_at: string;
           trend_score?: number | null;
-          baseline_ratio?: number | null;
           related_queries?: Json | null;
           series?: Json | null;
           created_at?: string;
@@ -123,7 +115,6 @@ export type Database = {
           keyword_id?: string;
           collected_at?: string;
           trend_score?: number | null;
-          baseline_ratio?: number | null;
           related_queries?: Json | null;
           series?: Json | null;
           created_at?: string;

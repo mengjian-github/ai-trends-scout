@@ -32,6 +32,8 @@ const buildOverviewFromSupabase = async (): Promise<OverviewPayload | null> => {
       };
     }
 
+    const hot24h = flattened.filter((keyword) => keyword.priority === "24h").length;
+    const hot72h = flattened.filter((keyword) => keyword.priority === "72h").length;
     const markets = new Set(flattened.map((keyword) => keyword.locale)).size;
     const latestTimestamp = flattened.reduce<string | null>((acc, keyword) => {
       if (!keyword.last_seen) {
@@ -49,12 +51,20 @@ const buildOverviewFromSupabase = async (): Promise<OverviewPayload | null> => {
 
     const metrics = [
       {
-        id: "tracked-keywords",
-        label: "监测关键词",
+        id: "fresh-keywords",
+        label: "72 小时内新词",
         value: flattened.length,
         unit: "项",
         delta: null,
-        hint: "各时间范围内的关键词数量",
+        hint: "当前三天内首次出现并通过校验的关键词数量",
+      },
+      {
+        id: "hot-keywords",
+        label: "24 小时新增",
+        value: hot24h,
+        unit: "项",
+        delta: null,
+        hint: `优先级最高的新词。72 小时窗口内其余新词共 ${hot72h} 项。`,
       },
       {
         id: "active-markets",

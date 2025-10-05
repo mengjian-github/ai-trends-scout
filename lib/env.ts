@@ -23,7 +23,6 @@ const baseSchema = z
     DATAFORSEO_LOGIN: z.string().optional(),
     DATAFORSEO_PASSWORD: z.string().optional(),
     DATAFORSEO_BASE_URL: z.string().url().optional().default("https://api.dataforseo.com/v3"),
-    AI_TRENDS_BASELINE_KEYWORD: z.string().optional(),
     AI_TRENDS_DEVELOPED_MARKETS: z
       .string()
       .optional()

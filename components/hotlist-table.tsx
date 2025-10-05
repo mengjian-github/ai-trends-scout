@@ -2,7 +2,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import type { HotKeyword } from "@/types/trends";
-import { formatNumber, formatPercentChange } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 const countryLabels: Record<string, string> = {
@@ -26,6 +26,16 @@ const timeframeLabels: Record<string, string> = {
   "now%207-d": "过去 7 天",
   past_7_days: "过去 7 天",
   past_30_days: "过去 30 天",
+};
+
+const priorityLabels: Record<string, string> = {
+  "24h": "24 小时新词",
+  "72h": "72 小时新词",
+};
+
+const priorityStyles: Record<string, string> = {
+  "24h": "bg-rose-500/20 text-rose-200",
+  "72h": "bg-amber-500/20 text-amber-200",
 };
 
 type HotlistTableProps = {
@@ -56,9 +66,9 @@ export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) 
                 <tr className="text-xs uppercase tracking-wide text-white/50">
                   <th className="pb-2 pr-4 font-medium">排名</th>
                   <th className="pb-2 pr-4 font-medium">关键词</th>
+                  <th className="pb-2 pr-4 font-medium">优先级</th>
                   <th className="pb-2 pr-4 font-medium">地区</th>
-                  <th className="pb-2 pr-4 font-medium">相对 gpts 比值</th>
-                  <th className="pb-2 pr-4 font-medium">动量</th>
+                  <th className="pb-2 pr-4 font-medium">峰值</th>
                   <th className="pb-2 pr-4 font-medium">首次出现</th>
                   <th className="pb-2 pr-4 font-medium">最近更新</th>
                 </tr>
@@ -75,11 +85,19 @@ export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) 
                         {item.summary ? <span className="text-xs text-white/50">{item.summary}</span> : null}
                       </div>
                     </td>
-                    <td className="py-3 pr-4 text-white/70">{countryLabels[item.locale] ?? item.locale.toUpperCase()}</td>
-                    <td className="py-3 pr-4 text-white">{formatNumber(item.latest_ratio, { maximumFractionDigits: 2 })}</td>
-                    <td className={`py-3 pr-4 ${Number(item.momentum ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                      {formatPercentChange(item.momentum)}
+                    <td className="py-3 pr-4">
+                      {item.priority ? (
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${priorityStyles[item.priority] ?? "bg-white/10 text-white/70"}`}
+                        >
+                          {priorityLabels[item.priority] ?? item.priority.toUpperCase()}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-white/40">—</span>
+                      )}
                     </td>
+                    <td className="py-3 pr-4 text-white/70">{countryLabels[item.locale] ?? item.locale.toUpperCase()}</td>
+                    <td className="py-3 pr-4 text-white">{formatNumber(item.spike_score, { maximumFractionDigits: 2 })}</td>
                     <td className="py-3 pr-4 text-white/60">
                       {item.first_seen
                         ? formatDistanceToNow(new Date(item.first_seen), { addSuffix: true, locale: zhCN })

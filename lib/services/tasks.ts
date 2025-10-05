@@ -31,7 +31,8 @@ const isTaskMetadata = (value: unknown): value is TaskMetadata => {
     typeof metadata.root_id === "string" &&
     typeof metadata.root_keyword === "string" &&
     typeof metadata.root_label === "string" &&
-    (metadata.baseline === undefined || typeof metadata.baseline === "string")
+    (metadata.baseline === undefined || typeof metadata.baseline === "string") &&
+    (metadata.discovery_depth === undefined || typeof metadata.discovery_depth === "number")
   );
 };
 

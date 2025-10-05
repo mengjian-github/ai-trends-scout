@@ -23,7 +23,6 @@ Internal dashboard and ingestion pipeline to track emerging AI-related demand ke
    `
 4. Open http://localhost:3000 to view the dashboard (redirects to /overview).
 
-> **Note**: Supabase and Redis credentials are required for server components to render data. When not available, the UI falls back to mock payloads defined in lib/mock-data.ts.
 
 ## Database Schema
 

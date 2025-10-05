@@ -20,6 +20,7 @@ export type TaskMetadata = {
   location_name?: string;
   location_code?: number;
   language_name?: string;
+  discovery_depth?: number;
   parent_task_id?: string;
   parent_keyword?: string;
 };

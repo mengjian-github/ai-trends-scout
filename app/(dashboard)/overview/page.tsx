@@ -7,10 +7,15 @@ import { HotlistTable } from "@/components/hotlist-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const hotlistTitleMap: Record<string, string> = {
-  "now%201%2Bd": "24 小时热门关键词",
-  "now%207-d": "7 天热门关键词",
-  past_7_days: "过去 7 天热门关键词",
-  past_30_days: "过去 30 天热门关键词",
+  "now%201%2Bd": "24 小时新词",
+  "now%207-d": "7 天新词",
+  past_7_days: "过去 7 天新词",
+  past_30_days: "过去 30 天新词",
+};
+
+const alertPriorityLabel: Record<string, string> = {
+  "24h": "24 小时",
+  "72h": "72 小时",
 };
 
 const OverviewPage = async () => {
@@ -25,6 +30,9 @@ const OverviewPage = async () => {
             <p className="text-sm text-white/60">生成时间 {new Date(overview.generatedAt).toLocaleString("zh-CN")}</p>
           </div>
         </div>
+        <p className="text-sm text-white/50">
+          仪表盘只展示最近 72 小时内首次出现的新词，带玫红标签者代表 24 小时内冒头的高优先级词。
+        </p>
         <MetricsGrid
           metrics={overview.metrics.map((metric) => ({
             id: metric.id,
@@ -63,7 +71,8 @@ const OverviewPage = async () => {
                     <div>
                       <p className="font-medium text-white">{alert.keyword}</p>
                       <p className="text-xs text-white/60">
-                        地区 {alert.locale.toUpperCase()} · 比值 {formatNumber(alert.ratio, { maximumFractionDigits: 2 })}
+                        地区 {alert.locale.toUpperCase()} · 峰值 {formatNumber(alert.spike_score, { maximumFractionDigits: 2 })}
+                        {alert.priority ? ` · 优先级 ${alertPriorityLabel[alert.priority] ?? alert.priority}` : ""}
                       </p>
                     </div>
                     <span className="text-xs text-white/50">{new Date(alert.triggeredAt).toLocaleString("zh-CN")}</span>
