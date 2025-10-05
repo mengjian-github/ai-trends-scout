@@ -1,0 +1,10 @@
+name = "ai-trends-scout-worker"
+main = "src/index.ts"
+compatibility_date = "2024-10-04"
+usage_model = "bundled"
+
+[vars]
+BASELINE_KEYWORD = "gpts"
+
+[env.production.vars]
+BASELINE_KEYWORD = "gpts"

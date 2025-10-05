@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "module": "esnext",
+    "target": "es2022"
+  },
+  "include": ["src/**/*.ts"]
+}
