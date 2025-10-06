@@ -1,11 +1,16 @@
 import { z } from "zod";
 
 const DEFAULT_NEWS_FEEDS = [
-  "https://feeds.feedburner.com/TechCrunch/artificial-intelligence",
-  "https://www.theverge.com/artificial-intelligence/rss/index.xml",
-  "https://rss.nytimes.com/services/xml/rss/nyt/ArtificialIntelligence.xml",
-  "https://www.wired.com/feed/tag/artificial-intelligence/latest/rss",
-  "https://36kr.com/feed-newsflash",
+  "https://techcrunch.com/category/artificial-intelligence/feed/",
+  "https://arstechnica.com/ai/feed/",
+  "https://aiscoop.com/feed/",
+  "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss",
+  "https://www.artificialintelligence-news.com/feed/",
+  "https://www.zdnet.com/topic/artificial-intelligence/rss.xml",
+  "https://www.marktechpost.com/feed/",
+  "https://www.theregister.com/software/ai/headlines.atom",
+  "https://siliconangle.com/category/emergent-tech/artificial-intelligence/feed/",
+  "https://decrypt.co/feed/ai",
 ];
 
 const baseSchema = z

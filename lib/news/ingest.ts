@@ -78,10 +78,33 @@ const STOPWORDS = new Set<string>([
   "报道",
 ]);
 
-const KEYWORD_MATCHERS: Array<(text: string) => string[]> = [
-  (text) => extractRegexMatches(text, /(gpt(?:-\d+)?|chatgpt|copilot|claude|gemini|llm|openai|anthropic|mistral)/gi),
-  (text) => extractRegexMatches(text, /(人工智能|大模型|生成式ai|生成式人工智能|算法|机器人)/gi),
-  (text) => extractRegexMatches(text, /(ai\s?[\w-]+|[\w-]+\s?ai)/gi),
+type KeywordMatcher = {
+  find: (text: string) => string[];
+  signalsAi: boolean;
+};
+
+const KEYWORD_MATCHERS: KeywordMatcher[] = [
+  {
+    find: (text) =>
+      extractRegexMatches(
+        text,
+        /(gpt(?:-\d+)?|chatgpt|copilot|claude|gemini|llm|openai|anthropic|mistral|stability ai|perplexity|genai|deepmind)/gi
+      ),
+    signalsAi: true,
+  },
+  {
+    find: (text) => extractRegexMatches(text, /(人工智能|大模型|生成式ai|生成式人工智能|算法|机器人)/gi),
+    signalsAi: true,
+  },
+  {
+    find: (text) => extractRegexMatches(text, /\bai(?:-[\w-]+)?\b/gi),
+    signalsAi: true,
+  },
+  {
+    find: (text) =>
+      extractRegexMatches(text, /(machine learning|deep learning|computer vision|natural language processing|nlp|robotics|neural networks?)/gi),
+    signalsAi: true,
+  },
 ];
 
 const extractRegexMatches = (text: string, pattern: RegExp) => {
@@ -141,14 +164,20 @@ const extractKeywords = (params: {
   summary: string;
   categories: string[];
   rootKeywordSet: Set<string>;
-}): { keywords: string[]; keywordCount: number } => {
+}): { keywords: string[]; keywordCount: number; hasAiSignal: boolean } => {
   const { item, title, summary, categories, rootKeywordSet } = params;
 
   const text = `${title}\n${summary}`.toLowerCase();
   const keywords = new Set<string>();
+  let hasAiSignal = false;
 
   for (const matcher of KEYWORD_MATCHERS) {
-    for (const match of matcher(text)) {
+    const matches = matcher.find(text);
+    if (matcher.signalsAi && matches.length > 0) {
+      hasAiSignal = true;
+    }
+
+    for (const match of matches) {
       const normalized = normalizeKeyword(match);
       if (normalized) {
         keywords.add(normalized);
@@ -201,7 +230,7 @@ const extractKeywords = (params: {
     .map((keyword) => keyword.slice(0, 120))
     .filter((keyword) => keyword && keyword !== "ai");
 
-  return { keywords: keywordList.slice(0, 16), keywordCount: keywordList.length };
+  return { keywords: keywordList.slice(0, 16), keywordCount: keywordList.length, hasAiSignal };
 };
 
 const DEFAULT_NEWS_WINDOW_MS = NEWS_KEYWORD_WINDOW_HOURS * 60 * 60 * 1000;
@@ -270,13 +299,18 @@ export const ingestNewsFeeds = async (): Promise<IngestStats> => {
           continue;
         }
 
-        const { keywords, keywordCount } = extractKeywords({
+        const { keywords, keywordCount, hasAiSignal } = extractKeywords({
           item,
           title,
           summary: summary ?? "",
           categories: item.categories ?? [],
           rootKeywordSet,
         });
+
+        if (!hasAiSignal) {
+          stats.skipped += 1;
+          continue;
+        }
 
         stats.keywordsDetected += keywordCount;
 
