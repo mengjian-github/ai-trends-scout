@@ -1,6 +1,7 @@
 ﻿export const dynamic = "force-dynamic";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TriggerNewsIngestButton } from "@/components/news/trigger-ingest-button";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 const NewsPage = async () => {
@@ -27,6 +28,9 @@ const NewsPage = async () => {
 
   return (
     <div className="space-y-8">
+      <section className="flex justify-end">
+        <TriggerNewsIngestButton />
+      </section>
       <section>
         <Card className="bg-black/20">
           <CardHeader>

@@ -164,7 +164,12 @@ const TaskRunDetailPage = async ({ params }: { params: Promise<{ runId: string }
                 <tbody>
                   {tasks.map((task) => {
                     const metadata = task.metadata;
-                    const sourceLabel = metadata?.source === "rising" ? "扩展" : "根关键词";
+                    let sourceLabel = "根关键词";
+                    if (metadata?.source === "rising") {
+                      sourceLabel = "扩展";
+                    } else if (metadata?.seed_origin === "news") {
+                      sourceLabel = "新闻种子";
+                    }
                     const statusStyle = statusStyles[task.status] ?? "bg-white/10 text-white/80";
 
                     return (

@@ -1,4 +1,3 @@
-﻿import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import type { HotKeyword } from "@/types/trends";
@@ -38,11 +37,17 @@ const priorityStyles: Record<string, string> = {
   "72h": "bg-amber-500/20 text-amber-200",
 };
 
-type HotlistTableProps = {
+const buildGoogleTrendsUrl = (keyword: string) => {
+  const normalized = keyword.trim();
+  const queryParam = normalized.length > 0 ? `&q=${encodeURIComponent(normalized)}` : "";
+  return `https://trends.google.com/trends/explore?date=now%207-d${queryParam}`;
+};
+
+interface HotlistTableProps {
   title: string;
   timeframe: string;
   keywords: HotKeyword[];
-};
+}
 
 export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) => {
   const hasData = keywords.length > 0;
@@ -79,9 +84,14 @@ export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) 
                     <td className="py-3 pr-4 text-white/60">第{index + 1}名</td>
                     <td className="py-3 pr-4">
                       <div className="flex flex-col">
-                        <Link href={`/keywords/${encodeURIComponent(item.id)}`} className="text-sm font-medium text-white hover:underline">
+                        <a
+                          href={buildGoogleTrendsUrl(item.keyword)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-white hover:underline"
+                        >
                           {item.keyword}
-                        </Link>
+                        </a>
                         {item.summary ? <span className="text-xs text-white/50">{item.summary}</span> : null}
                       </div>
                     </td>
@@ -118,4 +128,3 @@ export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) 
     </Card>
   );
 };
-

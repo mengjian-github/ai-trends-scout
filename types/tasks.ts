@@ -15,6 +15,11 @@ export type TaskMetadata = {
   root_keyword: string;
   root_label: string;
   baseline?: string;
+  seed_origin?: string;
+  news_id?: string;
+  news_source?: string | null;
+  news_title?: string | null;
+  news_published_at?: string | null;
   locale?: string;
   time_range?: string;
   location_name?: string;

@@ -3,6 +3,7 @@ import { developedMarkets, trendTimeframes, env } from "@/lib/env";
 import {
   createTrendRun,
   getActiveRoots,
+  getRecentNewsItems,
   getRunTaskCostTotal,
   getRunTaskStatusCounts,
   getTrendKeywordByKey,
@@ -32,7 +33,12 @@ import {
   type RisingQueryEntry,
 } from "@/lib/trends/utils";
 import type { TaskMetadata } from "@/types/tasks";
-import { NEW_KEYWORD_MAX_AGE_MS, RISING_QUEUE_THRESHOLD } from "@/lib/trends/constants";
+import {
+  NEW_KEYWORD_MAX_AGE_MS,
+  NEWS_KEYWORD_MAX_SEEDS,
+  NEWS_KEYWORD_WINDOW_HOURS,
+  RISING_QUEUE_THRESHOLD,
+} from "@/lib/trends/constants";
 
 const MARKET_INFO: Record<string, { code: number; name: string; language_name: string }> = {
   us: { code: 2840, name: "United States", language_name: "English" },
@@ -241,7 +247,7 @@ const ALL_ITEM_TYPES = [
   "google_trends_queries_list",
 ];
 
-const MAX_DISCOVERY_DEPTH = 2;
+const MAX_DISCOVERY_DEPTH = 3;
 const NEW_KEYWORD_MAX_AGE_DAYS = Math.ceil(NEW_KEYWORD_MAX_AGE_MS / (24 * 60 * 60 * 1000));
 
 const chunkArray = <T,>(items: T[], size: number): T[][] => {
@@ -825,6 +831,86 @@ function mergeRunMetadata(current: Json | null | undefined, updates: Record<stri
   return { ...toJsonRecord(current), ...updates } as unknown as Json;
 }
 
+type NewsSeedEntry = {
+  newsId: string;
+  keyword: string;
+  locale: string;
+  title: string | null;
+  source: string | null;
+  publishedAt: string | null;
+};
+
+const resolveNewsSeeds = async (params: {
+  markets: string[];
+  fallbackMarketKey: string;
+  seenKeywords: Set<string>;
+}): Promise<NewsSeedEntry[]> => {
+  const { markets, fallbackMarketKey, seenKeywords } = params;
+  const defaultLocale = markets.includes("global") ? "global" : fallbackMarketKey;
+
+  const newsItems = await getRecentNewsItems({
+    withinHours: NEWS_KEYWORD_WINDOW_HOURS,
+    limit: NEWS_KEYWORD_MAX_SEEDS * 3,
+  });
+
+  if (newsItems.length === 0) {
+    return [];
+  }
+
+  const seeds: NewsSeedEntry[] = [];
+
+  for (const item of newsItems) {
+    const keywords = Array.isArray(item.keywords) ? item.keywords : [];
+    if (keywords.length === 0) {
+      continue;
+    }
+
+    for (const candidate of keywords) {
+      if (typeof candidate !== "string") {
+        continue;
+      }
+
+      const keyword = candidate.trim();
+      if (!keyword) {
+        continue;
+      }
+
+      const normalized = normalizeKeyword(keyword);
+      if (!normalized || seenKeywords.has(normalized)) {
+        continue;
+      }
+
+      seeds.push({
+        newsId: item.id,
+        keyword,
+        locale: defaultLocale,
+        title: item.title ?? null,
+        source: item.source ?? null,
+        publishedAt: item.published_at ?? item.created_at ?? null,
+      });
+
+      seenKeywords.add(normalized);
+
+      if (seeds.length >= NEWS_KEYWORD_MAX_SEEDS) {
+        break;
+      }
+    }
+
+    if (seeds.length >= NEWS_KEYWORD_MAX_SEEDS) {
+      break;
+    }
+  }
+
+  if (seeds.length > 0) {
+    console.log("Resolved news keyword seeds", {
+      count: seeds.length,
+      keywords: seeds.map((seed) => seed.keyword),
+    });
+  }
+
+  return seeds;
+};
+
 const insertPostedTasks = async (posted: PostedExploreTask[]) => {
   if (posted.length === 0) {
     return;
@@ -866,7 +952,28 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
   const postbackUrl = buildPostbackUrl(callbackUrl);
 
   const roots: TrendRootRow[] = await getActiveRoots();
-  if (roots.length === 0) {
+  const markets = parseMarkets();
+  const fallbackMarketKey = markets.find((market) => market !== "global") ?? "us";
+  const timeframes = parseTimeframes();
+  const seenSeedKeywords = new Set<string>();
+  for (const root of roots) {
+    const normalized = normalizeKeyword(root.keyword);
+    if (normalized) {
+      seenSeedKeywords.add(normalized);
+    }
+  }
+
+  const newsSeeds = await resolveNewsSeeds({
+    markets,
+    fallbackMarketKey,
+    seenKeywords: seenSeedKeywords,
+  });
+
+  const rootKeywords = roots.map((item) => item.keyword);
+  const newsKeywords = newsSeeds.map((seed) => seed.keyword);
+  const seedKeywords = [...rootKeywords, ...newsKeywords];
+
+  if (seedKeywords.length === 0) {
     return {
       status: "ok" as const,
       posted: 0,
@@ -876,14 +983,14 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
     };
   }
 
-  const markets = parseMarkets();
-  const fallbackMarketKey = markets.find((market) => market !== "global") ?? "us";
-  const timeframes = parseTimeframes();
-
   const runMetadata = {
     markets,
     timeframes,
     root_count: roots.length,
+    news_keyword_count: newsSeeds.length,
+    news_keyword_window_hours: NEWS_KEYWORD_WINDOW_HOURS,
+    seed_keyword_total: seedKeywords.length,
+    news_keywords: newsKeywords,
   } satisfies Record<string, unknown>;
 
   let run: TrendRunRow;
@@ -891,7 +998,7 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
     run = await createTrendRun({
       status: "queued",
       trigger_source: "vercel/api/trends/run",
-      root_keywords: roots.map((item) => item.keyword),
+      root_keywords: seedKeywords,
       metadata: runMetadata as unknown as Json,
     });
   } catch (error) {
@@ -964,6 +1071,87 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
         runId,
         keyword: root.keyword,
         locale: root.locale,
+        timeframe,
+        payload,
+        metadata,
+      });
+    }
+  }
+
+  for (const seed of newsSeeds) {
+    for (const timeframe of timeframes) {
+      const baseTitle = seed.title && seed.title.trim().length > 0 ? seed.title.trim() : null;
+      const rootLabel = seed.source ? `${baseTitle ?? seed.keyword} · ${seed.source}` : baseTitle ?? seed.keyword;
+
+      if (seed.locale === "global") {
+        const metadata: TaskMetadata = {
+          source: "root",
+          root_id: seed.newsId,
+          root_keyword: seed.keyword,
+          root_label: rootLabel,
+          discovery_depth: 0,
+          locale: seed.locale,
+          time_range: timeframe,
+          location_name: "Global",
+          seed_origin: "news",
+          news_id: seed.newsId,
+          news_source: seed.source,
+          news_title: seed.title,
+          news_published_at: seed.publishedAt,
+        };
+
+        const payload: ExploreTaskPayload = {
+          time_range: timeframe,
+          keywords: [seed.keyword],
+          postback_url: postbackUrl,
+          item_types: ALL_ITEM_TYPES,
+        };
+
+        queued.push({
+          runId,
+          keyword: seed.keyword,
+          locale: seed.locale,
+          timeframe,
+          payload,
+          metadata,
+        });
+        continue;
+      }
+
+      const market = resolveMarketInfo(seed.locale, fallbackMarketKey);
+
+      const metadata: TaskMetadata = {
+        source: "root",
+        root_id: seed.newsId,
+        root_keyword: seed.keyword,
+        root_label: rootLabel,
+        discovery_depth: 0,
+        locale: seed.locale,
+        time_range: timeframe,
+        location_name: market.name,
+        location_code: market.code,
+        language_name: market.language_name,
+        seed_origin: "news",
+        news_id: seed.newsId,
+        news_source: seed.source,
+        news_title: seed.title,
+        news_published_at: seed.publishedAt,
+      };
+
+      const payload: ExploreTaskPayload = {
+        time_range: timeframe,
+        keywords: [seed.keyword],
+        location_name: market.name,
+        location_code: market.code,
+        language_name: market.language_name,
+        postback_url: postbackUrl,
+        item_types: ALL_ITEM_TYPES,
+      };
+
+      queued.push({
+        runId,
+        keyword: seed.keyword,
+        locale: seed.locale,
         timeframe,
         payload,
         metadata,

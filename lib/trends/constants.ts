@@ -6,3 +6,6 @@ export const BASELINE_MAX_BEFORE_WINDOW = 5;
 export const MIN_SPIKE_VALUE = 20;
 export const RISING_QUEUE_THRESHOLD = 50;
 export const BREAKOUT_SENTINEL_VALUE = 1000;
+
+export const NEWS_KEYWORD_WINDOW_HOURS = 48;
+export const NEWS_KEYWORD_MAX_SEEDS = 20;

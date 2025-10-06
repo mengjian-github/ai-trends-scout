@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+const DEFAULT_NEWS_FEEDS = [
+  "https://feeds.feedburner.com/TechCrunch/artificial-intelligence",
+  "https://www.theverge.com/artificial-intelligence/rss/index.xml",
+  "https://rss.nytimes.com/services/xml/rss/nyt/ArtificialIntelligence.xml",
+  "https://www.wired.com/feed/tag/artificial-intelligence/latest/rss",
+  "https://36kr.com/feed-newsflash",
+];
+
 const baseSchema = z
   .object({
     NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
@@ -33,11 +41,24 @@ const baseSchema = z
       .default("past_7_days"),
     AI_TRENDS_SYNC_TOKEN: z.string().optional(),
     AI_TRENDS_CALLBACK_TOKEN: z.string().optional(),
+    AI_TRENDS_NEWS_FEEDS: z.string().optional(),
+    AI_TRENDS_NEWS_MAX_ITEMS: z.string().optional(),
   })
   .transform((values) => ({
     ...values,
     AI_TRENDS_DEVELOPED_MARKETS_LIST: values.AI_TRENDS_DEVELOPED_MARKETS?.split(",").map((item) => item.trim()).filter(Boolean) ?? [],
     AI_TRENDS_TIMEFRAMES_LIST: values.AI_TRENDS_TIMEFRAMES?.split(",").map((item) => item.trim()).filter(Boolean) ?? [],
+    AI_TRENDS_NEWS_FEEDS_LIST:
+      values.AI_TRENDS_NEWS_FEEDS?.split(",").map((item) => item.trim()).filter(Boolean) ?? DEFAULT_NEWS_FEEDS,
+    AI_TRENDS_NEWS_MAX_ITEMS_NUMBER: (() => {
+      const raw = values.AI_TRENDS_NEWS_MAX_ITEMS;
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })(),
   }));
 
 export type AppEnv = z.infer<typeof baseSchema>;
@@ -71,3 +92,5 @@ export const requiredServerEnv = () => {
 
 export const developedMarkets = env.AI_TRENDS_DEVELOPED_MARKETS_LIST as string[];
 export const trendTimeframes = env.AI_TRENDS_TIMEFRAMES_LIST as string[];
+export const newsFeedUrls = env.AI_TRENDS_NEWS_FEEDS_LIST as string[];
+export const newsMaxItems = env.AI_TRENDS_NEWS_MAX_ITEMS_NUMBER as number | null;

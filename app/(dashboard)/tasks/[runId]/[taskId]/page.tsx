@@ -96,6 +96,11 @@ const MetadataSummary = ({ metadata }: { metadata?: TaskMetadata }) => {
     ["根关键词", metadata.root_keyword ?? "—"],
   ];
 
+  if (metadata.seed_origin) {
+    const originLabel = metadata.seed_origin === "news" ? "AI 新闻" : metadata.seed_origin;
+    entries.push(["种子来源", originLabel]);
+  }
+
   if (typeof metadata.baseline === "string" && metadata.baseline.trim().length > 0) {
     entries.push(["基准词", metadata.baseline]);
   }
@@ -112,6 +117,22 @@ const MetadataSummary = ({ metadata }: { metadata?: TaskMetadata }) => {
 
   if (metadata.parent_task_id) {
     entries.push(["父任务 ID", metadata.parent_task_id]);
+  }
+
+  if (metadata.news_source) {
+    entries.push(["新闻来源", metadata.news_source]);
+  }
+
+  if (metadata.news_title) {
+    entries.push(["新闻标题", metadata.news_title]);
+  }
+
+  if (metadata.news_published_at) {
+    const publishedDate = new Date(metadata.news_published_at);
+    const formatted = Number.isNaN(publishedDate.getTime())
+      ? metadata.news_published_at
+      : publishedDate.toLocaleString("zh-CN", { hour12: false });
+    entries.push(["新闻发布时间", formatted]);
   }
 
   return (

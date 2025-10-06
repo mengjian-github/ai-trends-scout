@@ -32,6 +32,7 @@ export type TrendRootUpdate = Database["public"]["Tables"]["ai_trends_roots"]["U
 export type TrendRunRow = Database["public"]["Tables"]["ai_trends_runs"]["Row"];
 export type TrendRunInsert = Database["public"]["Tables"]["ai_trends_runs"]["Insert"];
 export type TrendRunUpdate = Database["public"]["Tables"]["ai_trends_runs"]["Update"];
+export type NewsItemRow = Database["public"]["Tables"]["ai_trends_news"]["Row"];
 
 export const getLatestKeywords = async (params: { timeframe?: string; limit?: number }) => {
   const client = getSupabaseAdmin();
@@ -89,6 +90,46 @@ export const getActiveRoots = async () => {
   }
 
   return data ?? [];
+};
+
+export const getRecentNewsItems = async (
+  params: { withinHours?: number; limit?: number } = {}
+): Promise<NewsItemRow[]> => {
+  const { withinHours = 48, limit = 100 } = params;
+  const client = getSupabaseAdmin();
+
+  const { data, error } = await client
+    .from("ai_trends_news")
+    .select("id, title, source, published_at, created_at, keywords, metadata")
+    .order("published_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const items: NewsItemRow[] = data ?? [];
+
+  if (!withinHours || withinHours <= 0) {
+    return items;
+  }
+
+  const thresholdMs = Date.now() - withinHours * 60 * 60 * 1000;
+
+  return items.filter((item) => {
+    const reference = item.published_at ?? item.created_at;
+    if (!reference) {
+      return true;
+    }
+
+    const date = new Date(reference);
+    if (Number.isNaN(date.getTime())) {
+      return true;
+    }
+
+    return date.getTime() >= thresholdMs;
+  });
 };
 
 export const getAllRoots = async (): Promise<TrendRootRow[]> => {
