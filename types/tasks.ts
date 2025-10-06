@@ -33,6 +33,13 @@ export type TaskMetadata = {
   discovery_depth?: number;
   parent_task_id?: string;
   parent_keyword?: string;
+  demand_assessment?: {
+    label?: string | null;
+    score?: number | null;
+    reason?: string | null;
+    summary?: string | null;
+    updated_at?: string | null;
+  };
 };
 
 export type TaskRunListItem = {

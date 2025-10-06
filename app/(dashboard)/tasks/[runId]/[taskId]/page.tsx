@@ -141,6 +141,41 @@ const MetadataSummary = ({ metadata }: { metadata?: TaskMetadata }) => {
     entries.push(["父任务 ID", metadata.parent_task_id]);
   }
 
+  if (metadata.demand_assessment) {
+    const { label, score, summary, reason, updated_at: updatedAt } = metadata.demand_assessment;
+    const labelText = (() => {
+      if (label === "tool") {
+        return "工具需求";
+      }
+      if (label === "non_tool") {
+        return "非工具需求";
+      }
+      return "尚不确定";
+    })();
+
+    entries.push(["LLM 判定", labelText]);
+
+    if (typeof score === "number") {
+      entries.push(["判定置信度", score.toFixed(2)]);
+    }
+
+    if (summary) {
+      entries.push(["需求摘要", summary]);
+    }
+
+    if (reason) {
+      entries.push(["判定说明", reason]);
+    }
+
+    if (updatedAt) {
+      const updatedDate = new Date(updatedAt);
+      const formattedUpdated = Number.isNaN(updatedDate.getTime())
+        ? updatedAt
+        : updatedDate.toLocaleString("zh-CN", { hour12: false });
+      entries.push(["判定时间", formattedUpdated]);
+    }
+  }
+
   if (metadata.news_source) {
     entries.push(["新闻来源", metadata.news_source]);
   }

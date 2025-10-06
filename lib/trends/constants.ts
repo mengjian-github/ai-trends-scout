@@ -7,5 +7,8 @@ export const MIN_SPIKE_VALUE = 20;
 export const RISING_QUEUE_THRESHOLD = 50;
 export const BREAKOUT_SENTINEL_VALUE = 1000;
 
+export const SPIKE_DECAY_WINDOW_HOURS = 24;
+export const SPIKE_DECAY_MAX_VALUE = 0;
+
 export const NEWS_KEYWORD_WINDOW_HOURS = 48;
 export const NEWS_KEYWORD_MAX_SEEDS = 20;

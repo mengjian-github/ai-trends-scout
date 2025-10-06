@@ -263,7 +263,7 @@ const callCandidateJudge = async (candidate: CandidateRootRow) => {
   }
 
   const body = {
-    model: openRouterModel ?? "anthropic/claude-3-haiku",
+    model: openRouterModel ?? "deepseek/deepseek-chat-v3.1:free",
     response_format: { type: "json_object" },
     messages: [
       {

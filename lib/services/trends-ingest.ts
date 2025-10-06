@@ -36,9 +36,11 @@ import {
   analyzeKeywordSpike,
   decodeMetadataTag,
   extractRisingQueryEntries,
+  extractGraphSeriesForKeyword,
   mapStatusCodeToTaskStatus,
   normalizeKeyword,
   normalizeTimeframe,
+  type KeywordSeriesPoint,
   type RisingQueryEntry,
 } from "@/lib/trends/utils";
 import type { TaskMetadata } from "@/types/tasks";
@@ -47,7 +49,16 @@ import {
   NEWS_KEYWORD_MAX_SEEDS,
   NEWS_KEYWORD_WINDOW_HOURS,
   RISING_QUEUE_THRESHOLD,
+  SPIKE_DECAY_MAX_VALUE,
+  SPIKE_DECAY_WINDOW_HOURS,
 } from "@/lib/trends/constants";
+import {
+  assessKeywordDemand,
+  isToolDemand,
+  sanitizeDemandAssessment,
+  type DemandDecisionLabel,
+  type KeywordDemandAssessment,
+} from "@/lib/services/keyword-demand";
 
 const MARKET_INFO: Record<string, { code: number; name: string; language_name: string }> = {
   us: { code: 2840, name: "United States", language_name: "English" },
@@ -276,6 +287,54 @@ const decodeURIComponentSafe = (value: string) => {
   } catch {
     return value;
   }
+};
+
+const SPIKE_DECAY_WINDOW_MS = SPIKE_DECAY_WINDOW_HOURS * 60 * 60 * 1000;
+
+const hasSpikeDecayed = (series: KeywordSeriesPoint[]): boolean => {
+  if (!Array.isArray(series) || series.length === 0) {
+    return false;
+  }
+
+  const latest = series[series.length - 1];
+  if (!latest) {
+    return false;
+  }
+
+  if (typeof latest.value === "number" && latest.value > SPIKE_DECAY_MAX_VALUE) {
+    return false;
+  }
+
+  const nowMs = Date.now();
+  const windowStart = nowMs - SPIKE_DECAY_WINDOW_MS;
+  const recentPoints = series.filter((point) => point.timestamp >= windowStart);
+
+  if (recentPoints.length === 0) {
+    return (latest.value ?? 0) <= SPIKE_DECAY_MAX_VALUE;
+  }
+
+  const recentMax = Math.max(...recentPoints.map((point) => point.value ?? 0));
+  return recentMax <= SPIKE_DECAY_MAX_VALUE;
+};
+
+const toKeywordDemandAssessment = (
+  value: TaskMetadata["demand_assessment"] | undefined | null
+): KeywordDemandAssessment | null => {
+  if (!value) {
+    return null;
+  }
+
+  const rawLabel = typeof value.label === "string" ? value.label.trim().toLowerCase() : "unclear";
+  const label: DemandDecisionLabel = rawLabel === "tool" || rawLabel === "non_tool" ? (rawLabel as DemandDecisionLabel) : "unclear";
+
+  return {
+    enabled: true,
+    label,
+    score: typeof value.score === "number" && Number.isFinite(value.score) ? value.score : null,
+    reason: typeof value.reason === "string" ? value.reason : null,
+    demandSummary:
+      typeof value.summary === "string" && value.summary.trim().length > 0 ? value.summary.trim() : null,
+  };
 };
 
 const isWithinNewKeywordWindow = (existing: TrendKeywordRow | null | undefined) => {
@@ -581,7 +640,8 @@ const handleRisingKeywordExpansion = async (params: {
 
   const queued: QueuedExploreTask[] = [];
 
-  uniqueEntries.forEach((entry, index) => {
+  for (let index = 0; index < uniqueEntries.length; index += 1) {
+    const entry = uniqueEntries[index];
     const existing = existingRecords[index] ?? null;
 
     if (!isWithinNewKeywordWindow(existing)) {
@@ -591,7 +651,7 @@ const handleRisingKeywordExpansion = async (params: {
         firstSeen: existing?.first_seen,
         maxAgeDays: NEW_KEYWORD_MAX_AGE_DAYS,
       });
-      return;
+      continue;
     }
 
     if (!canExpand) {
@@ -602,7 +662,7 @@ const handleRisingKeywordExpansion = async (params: {
         depth: currentDepth,
         maxDepth: MAX_DISCOVERY_DEPTH,
       });
-      return;
+      continue;
     }
 
     if (!postbackUrl) {
@@ -611,7 +671,35 @@ const handleRisingKeywordExpansion = async (params: {
         keyword: entry.keyword,
         reason: "missing_postback_url",
       });
-      return;
+      continue;
+    }
+
+    let demandAssessment: KeywordDemandAssessment | null = null;
+    try {
+      demandAssessment = await assessKeywordDemand({
+        keyword: entry.keyword,
+        rootKeyword: metadata.root_keyword,
+        parentKeyword: taskRecord.keyword,
+        locale,
+        timeframe: timeframeKey,
+        spikeScore: entry.value,
+        notes: "rising_expansion",
+      });
+    } catch (error) {
+      console.error("Failed to run demand assessment for rising entry", {
+        keyword: entry.keyword,
+        error,
+      });
+    }
+
+    if (demandAssessment && !isToolDemand(demandAssessment)) {
+      console.debug("Skip rising entry: LLM rejected tool demand", {
+        taskId: taskRecord.task_id,
+        keyword: entry.keyword,
+        label: demandAssessment.label,
+        reason: demandAssessment.reason ?? null,
+      });
+      continue;
     }
 
     const childMetadata: TaskMetadata = {
@@ -629,6 +717,11 @@ const handleRisingKeywordExpansion = async (params: {
       parent_keyword: taskRecord.keyword,
       discovery_depth: nextDepth,
     };
+
+    const assessmentMetadata = sanitizeDemandAssessment(demandAssessment ?? undefined);
+    if (assessmentMetadata) {
+      childMetadata.demand_assessment = assessmentMetadata;
+    }
 
     const payload: ExploreTaskPayload = {
       time_range: timeframeKey,
@@ -648,7 +741,7 @@ const handleRisingKeywordExpansion = async (params: {
       payload,
       metadata: childMetadata,
     });
-  });
+  }
 
   let queuedTasks = 0;
   if (queued.length > 0) {
@@ -719,6 +812,17 @@ const evaluateKeywordFromTask = async (params: {
     return null;
   }
 
+  const series = extractGraphSeriesForKeyword(taskResult, keyword);
+  if (hasSpikeDecayed(series)) {
+    console.debug("Skip keyword spike: demand decayed", {
+      taskId: taskRecord.task_id,
+      keyword,
+      latestValue: series.length > 0 ? series[series.length - 1]?.value ?? null : null,
+      windowHours: SPIKE_DECAY_WINDOW_HOURS,
+    });
+    return null;
+  }
+
   const firstSeenDate = new Date(analysis.firstSeenAt);
   if (Number.isNaN(firstSeenDate.getTime())) {
     console.debug("Skip keyword spike: invalid firstSeen date", {
@@ -760,6 +864,38 @@ const evaluateKeywordFromTask = async (params: {
   }
 
   const existingMetadata = existing ? toJsonRecord(existing.metadata as Json) : {};
+  const existingDemandRaw =
+    existingMetadata && typeof existingMetadata === "object" && "demand_assessment" in existingMetadata
+      ? (existingMetadata.demand_assessment as TaskMetadata["demand_assessment"])
+      : null;
+
+  let demandAssessment =
+    toKeywordDemandAssessment(metadata.demand_assessment) ?? toKeywordDemandAssessment(existingDemandRaw);
+
+  if (!demandAssessment || demandAssessment.label === "unclear" || !demandAssessment.demandSummary) {
+    demandAssessment = await assessKeywordDemand({
+      keyword,
+      rootKeyword: metadata.root_keyword,
+      parentKeyword: metadata.parent_keyword ?? taskRecord.keyword,
+      locale: localeValue,
+      timeframe: timeframeKey,
+      spikeScore: analysis.spikeScore ?? analysis.recentMax ?? null,
+      notes: analysis.priority ? `priority=${analysis.priority}` : null,
+    });
+  }
+
+  if (demandAssessment && !isToolDemand(demandAssessment)) {
+    console.debug("Skip keyword spike: demand assessment rejected", {
+      taskId: taskRecord.task_id,
+      keyword,
+      label: demandAssessment.label,
+      reason: demandAssessment.reason ?? null,
+    });
+    return null;
+  }
+
+  const sanitizedAssessment = sanitizeDemandAssessment(demandAssessment ?? undefined);
+  const demandSummary = sanitizedAssessment?.summary ?? null;
   const nowIso = new Date().toISOString();
   const metadataUpdates = {
     ...existingMetadata,
@@ -771,6 +907,27 @@ const evaluateKeywordFromTask = async (params: {
       recent_max: analysis.recentMax ?? null,
     },
   } as Record<string, unknown>;
+
+  if (sanitizedAssessment) {
+    metadataUpdates.demand_assessment = sanitizedAssessment;
+  }
+
+  const keywordSummary = (() => {
+    if (demandSummary && demandSummary.length > 0) {
+      const trimmed = demandSummary.trim();
+      if (trimmed.length === 0) {
+        return null;
+      }
+      return trimmed.length > 240 ? `${trimmed.slice(0, 237)}...` : trimmed;
+    }
+
+    if (typeof existing?.summary === "string" && existing.summary.trim().length > 0) {
+      const trimmed = existing.summary.trim();
+      return trimmed.length > 240 ? `${trimmed.slice(0, 237)}...` : trimmed;
+    }
+
+    return null;
+  })();
 
   const firstSeen = (() => {
     if (existing?.first_seen) {
@@ -802,6 +959,7 @@ const evaluateKeywordFromTask = async (params: {
       last_seen: lastSeen,
       spike_score: analysis.spikeScore ?? null,
       priority: analysis.priority ?? null,
+      summary: keywordSummary,
       metadata: metadataUpdates as unknown as Json,
     });
   } catch (error) {
