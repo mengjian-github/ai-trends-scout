@@ -48,6 +48,9 @@ const baseSchema = z
     AI_TRENDS_CALLBACK_TOKEN: z.string().optional(),
     AI_TRENDS_NEWS_FEEDS: z.string().optional(),
     AI_TRENDS_NEWS_MAX_ITEMS: z.string().optional(),
+    AI_TRENDS_ADMIN_USERNAME: z.string().optional(),
+    AI_TRENDS_ADMIN_PASSWORD: z.string().optional(),
+    AI_TRENDS_SESSION_SECRET: z.string().optional(),
   })
   .transform((values) => ({
     ...values,

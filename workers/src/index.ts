@@ -22,20 +22,28 @@ const handleSync = async (env: Env) => {
   }
 
   try {
-    const response = await fetch(env.VERCEL_SYNC_URL, {
-      method: "POST",
-      headers: buildHeaders(env),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort("Request timed out"), 45_000);
 
-    const body = await response.text();
-    const contentType = response.headers.get("content-type") ?? "application/json";
+    try {
+      const response = await fetch(env.VERCEL_SYNC_URL, {
+        method: "POST",
+        headers: buildHeaders(env),
+        signal: controller.signal,
+      });
 
-    return new Response(body || JSON.stringify({ status: response.ok ? "ok" : "error" }), {
-      status: response.status,
-      headers: {
-        "Content-Type": contentType,
-      },
-    });
+      const body = await response.text();
+      const contentType = response.headers.get("content-type") ?? "application/json";
+
+      return new Response(body || JSON.stringify({ status: response.ok ? "ok" : "error" }), {
+        status: response.status,
+        headers: {
+          "Content-Type": contentType,
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (error) {
     console.error("Failed to trigger Vercel sync", error);
     return new Response(
@@ -58,7 +66,7 @@ const worker: ExportedHandler<Env> = {
       headers: { "Content-Type": "text/plain" },
     });
   },
-  async scheduled(_event, env, ctx) {
+  async scheduled(event, env, ctx) {
     ctx.waitUntil(handleSync(env));
   },
 };

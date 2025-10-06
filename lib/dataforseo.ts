@@ -56,23 +56,41 @@ const parseResponse = async <T>(response: Response): Promise<T> => {
   return JSON.parse(text) as T;
 };
 
+type DataForSeoRequestInit = RequestInit & { timeoutMs?: number };
+
+const DEFAULT_TIMEOUT_MS = 120_000;
+
 export const dataForSeoFetch = async <T>(
   endpoint: string,
   payload: unknown,
-  init?: RequestInit
+  init?: DataForSeoRequestInit
 ): Promise<T> => {
   const url = `${resolveBaseUrl()}${endpoint}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: resolveAuthHeader(),
-    },
-    body: JSON.stringify(payload),
-    ...init,
-  });
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, ...requestInit } = init ?? {};
 
-  return parseResponse<T>(response);
+  const controller = new AbortController();
+  const timeoutId = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  const mergedSignal = signal ?? (timeoutId ? controller.signal : undefined);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: resolveAuthHeader(),
+        ...requestInit.headers,
+      },
+      body: JSON.stringify(payload),
+      ...requestInit,
+      signal: mergedSignal,
+    });
+
+    return parseResponse<T>(response);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 };
 
 export type TrendsTaskRequestBody = {

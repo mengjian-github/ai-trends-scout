@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BarChart3, BrainCircuit, ClipboardList, Newspaper, Settings } from "lucide-react";
+import { BarChart3, BrainCircuit, ClipboardList, LogOut, Newspaper, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/overview", label: "概览", icon: BarChart3 },
@@ -38,6 +38,14 @@ export const DashboardNav = () => {
           </Link>
         );
       })}
+      <Link
+        href="/logout"
+        prefetch={false}
+        className="flex items-center gap-2 rounded-full bg-transparent px-4 py-2 text-white/60 transition hover:bg-white/10 hover:text-white"
+      >
+        <LogOut size={16} />
+        <span>退出</span>
+      </Link>
     </nav>
   );
 };

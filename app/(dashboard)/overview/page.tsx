@@ -1,7 +1,7 @@
 ﻿export const dynamic = "force-dynamic";
 
 import { resolveOverviewPayload } from "@/lib/services/overview";
-import { formatNumber } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { MetricsGrid } from "@/components/metrics-grid";
 import { HotlistTable } from "@/components/hotlist-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,14 +46,19 @@ const OverviewPage = async () => {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
-        {overview.hotlists.map((hotlist) => (
-          <HotlistTable
-            key={hotlist.timeframe}
-            title={hotlistTitleMap[hotlist.timeframe] ?? decodeURIComponent(hotlist.timeframe)}
-            timeframe={hotlist.timeframe}
-            keywords={hotlist.keywords}
-          />
-        ))}
+        {overview.hotlists.map((hotlist) => {
+          const isFullWidth = hotlist.timeframe === "past_7_days";
+
+          return (
+            <div key={hotlist.timeframe} className={cn("min-w-0", isFullWidth && "xl:col-span-2")}>
+              <HotlistTable
+                title={hotlistTitleMap[hotlist.timeframe] ?? decodeURIComponent(hotlist.timeframe)}
+                timeframe={hotlist.timeframe}
+                keywords={hotlist.keywords}
+              />
+            </div>
+          );
+        })}
       </section>
 
       <section>

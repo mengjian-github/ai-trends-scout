@@ -4,6 +4,7 @@ import { env, requiredServerEnv } from "@/lib/env";
 import { queueRootTasks } from "@/lib/services/trends-ingest";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const isAuthorized = (request: NextRequest) => {
   if (!env.AI_TRENDS_SYNC_TOKEN) {
