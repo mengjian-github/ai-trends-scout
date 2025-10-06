@@ -37,6 +37,41 @@ export type CandidateRootRow = Database["public"]["Tables"]["ai_trends_candidate
 export type CandidateRootInsert = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Insert"];
 export type CandidateRootUpdate = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Update"];
 
+export const deleteAllTrendKeywords = async (): Promise<number> => {
+  const client = getSupabaseAdmin();
+  const { data, error } = await client
+    .from("ai_trends_keywords")
+    .delete()
+    .not("id", "is", null)
+    .select("id");
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as { id: string }[] | null)?.length ?? 0;
+};
+
+export const deleteCandidateRootsBySource = async (source: string): Promise<number> => {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return 0;
+  }
+
+  const client = getSupabaseAdmin();
+  const { data, error } = await client
+    .from("ai_trends_candidate_roots")
+    .delete()
+    .eq("source", trimmed)
+    .select("id");
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as { id: string }[] | null)?.length ?? 0;
+};
+
 export const getLatestKeywords = async (params: { timeframe?: string; limit?: number }) => {
   const client = getSupabaseAdmin();
   const { timeframe, limit = 50 } = params;

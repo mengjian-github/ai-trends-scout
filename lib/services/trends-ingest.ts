@@ -2,6 +2,8 @@ import { dataForSeoFetch } from "@/lib/dataforseo";
 import { developedMarkets, trendTimeframes, env } from "@/lib/env";
 import {
   createTrendRun,
+  deleteAllTrendKeywords,
+  deleteCandidateRootsBySource,
   getActiveRoots,
   getRecentNewsItems,
   getRunTaskCostTotal,
@@ -24,6 +26,7 @@ import {
   markCandidatesQueued,
   type CandidateSeed,
 } from "@/lib/services/candidates";
+import { harvestSignals } from "@/lib/signals/ingest";
 import type { Json } from "@/types/supabase";
 import { normalizeTaskResults } from "@/lib/tasks/dataforseo";
 import type { ExploreItem } from "@/lib/tasks/dataforseo";
@@ -957,8 +960,27 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
   const { callbackUrl } = options;
   const postbackUrl = buildPostbackUrl(callbackUrl);
 
+  const clearedKeywordCount = await deleteAllTrendKeywords();
+  const clearedNewsCandidates = await deleteCandidateRootsBySource("news_keyword");
+
+  console.log("Cleared previous keyword state", {
+    keywords: clearedKeywordCount,
+    newsCandidateRoots: clearedNewsCandidates,
+  });
+
+  let signalsHarvested = false;
+  try {
+    await harvestSignals();
+    signalsHarvested = true;
+  } catch (error) {
+    console.error("Failed to harvest signals before queuing tasks", error);
+  }
+
+  if (!signalsHarvested) {
+    await expireStaleCandidates();
+  }
+
   const roots: TrendRootRow[] = await getActiveRoots();
-  await expireStaleCandidates();
   const markets = parseMarkets();
   const fallbackMarketKey = markets.find((market) => market !== "global") ?? "us";
   const timeframes = parseTimeframes();

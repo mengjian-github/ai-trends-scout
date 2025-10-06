@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { buildGoogleTrendsUrl } from "@/lib/google-trends";
 import type { HotKeyword } from "@/types/trends";
 import { formatNumber } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -39,12 +40,6 @@ const priorityLabels: Record<string, string> = {
 const priorityStyles: Record<string, string> = {
   "24h": "bg-rose-500/20 text-rose-200",
   "72h": "bg-amber-500/20 text-amber-200",
-};
-
-const buildGoogleTrendsUrl = (keyword: string) => {
-  const normalized = keyword.trim();
-  const queryParam = normalized.length > 0 ? `&q=${encodeURIComponent(normalized)}` : "";
-  return `https://trends.google.com/trends/explore?date=now%207-d${queryParam}`;
 };
 
 interface HotlistTableProps {

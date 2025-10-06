@@ -9,6 +9,7 @@ import type {
   ExploreMapEntry,
   ExploreRankedQuery,
 } from "@/lib/tasks/dataforseo";
+import { buildGoogleTrendsUrl } from "@/lib/google-trends";
 import { normalizeTaskResults } from "@/lib/tasks/dataforseo";
 import type { RunTaskItem } from "@/types/tasks";
 import { format } from "date-fns";
@@ -402,13 +403,32 @@ const QueriesTable = ({ queries }: { queries: ExploreRankedQuery[] }) => {
               const valueNumber = typeof query.value === "number" ? query.value : undefined;
               const highlight = valueNumber !== undefined && valueNumber >= 100;
               const rowKey = query.query ?? `${index}-${currentPage}`;
+              const queryText = query.query?.trim();
 
               return (
                 <tr
                   key={rowKey}
                   className={clsx("border-b border-white/5 last:border-none", highlight && "bg-emerald-500/10")}
                 >
-                  <td className={clsx("py-2 pr-4 text-white", highlight && "font-semibold")}>{query.query ?? "—"}</td>
+                  <td
+                    className={clsx(
+                      "py-2 pr-4",
+                      highlight ? "text-emerald-100 font-semibold" : "text-white"
+                    )}
+                  >
+                    {queryText ? (
+                      <a
+                        href={buildGoogleTrendsUrl(queryText)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline"
+                      >
+                        {queryText}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className={clsx("py-2 pr-4", highlight ? "text-emerald-200 font-semibold" : "text-white/80")}>{formatValue(query.value)}</td>
                 </tr>
               );
