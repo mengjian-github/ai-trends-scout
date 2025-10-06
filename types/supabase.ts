@@ -155,6 +155,77 @@ export type Database = {
           created_at?: string;
         };
       };
+      ai_trends_candidate_roots: {
+        Row: {
+          id: string;
+          term: string;
+          term_normalized: string;
+          source: string;
+          status: string;
+          raw_title: string | null;
+          raw_summary: string | null;
+          raw_tags: string[] | null;
+          url: string | null;
+          captured_at: string;
+          expires_at: string;
+          llm_label: string | null;
+          llm_score: number | null;
+          llm_reason: string | null;
+          llm_attempts: number;
+          llm_last_attempt: string | null;
+          rejection_reason: string | null;
+          queried_at: string | null;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          term: string;
+          term_normalized: string;
+          source: string;
+          status?: string;
+          raw_title?: string | null;
+          raw_summary?: string | null;
+          raw_tags?: string[] | null;
+          url?: string | null;
+          captured_at?: string;
+          expires_at?: string;
+          llm_label?: string | null;
+          llm_score?: number | null;
+          llm_reason?: string | null;
+          llm_attempts?: number;
+          llm_last_attempt?: string | null;
+          rejection_reason?: string | null;
+          queried_at?: string | null;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          term?: string;
+          term_normalized?: string;
+          source?: string;
+          status?: string;
+          raw_title?: string | null;
+          raw_summary?: string | null;
+          raw_tags?: string[] | null;
+          url?: string | null;
+          captured_at?: string;
+          expires_at?: string;
+          llm_label?: string | null;
+          llm_score?: number | null;
+          llm_reason?: string | null;
+          llm_attempts?: number;
+          llm_last_attempt?: string | null;
+          rejection_reason?: string | null;
+          queried_at?: string | null;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       ai_trends_notifications: {
         Row: {
           id: string;

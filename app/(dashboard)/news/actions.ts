@@ -1,11 +1,10 @@
 "use server";
 
-import { ingestNewsFeeds } from "@/lib/news/ingest";
+import { harvestSignals } from "@/lib/signals/ingest";
 import { requiredServerEnv } from "@/lib/env";
 
 export async function triggerNewsIngest() {
   requiredServerEnv();
-  const stats = await ingestNewsFeeds();
-  return stats;
+  const summary = await harvestSignals();
+  return summary;
 }
-

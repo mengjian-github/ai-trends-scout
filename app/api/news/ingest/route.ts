@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { env, requiredServerEnv } from "@/lib/env";
-import { ingestNewsFeeds } from "@/lib/news/ingest";
+import { harvestSignals } from "@/lib/signals/ingest";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -32,8 +32,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const stats = await ingestNewsFeeds();
-    return NextResponse.json({ status: "ok", ...stats });
+    const summary = await harvestSignals();
+    return NextResponse.json({
+      status: "ok",
+      inserted: summary.news.inserted,
+      updated: summary.news.updated,
+      skipped: summary.news.skipped,
+      summary,
+    });
   } catch (error) {
     console.error("Failed to ingest AI news", error);
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

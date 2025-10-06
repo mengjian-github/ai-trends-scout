@@ -8,6 +8,7 @@ import { zhCN } from "date-fns/locale";
 import { resolveTaskRunDetail } from "@/lib/services/tasks";
 import { formatNumber } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RunTasksTable } from "@/components/tasks/run-tasks-table";
 
 const statusStyles: Record<string, string> = {
   queued: "bg-sky-500/10 text-sky-300",
@@ -145,73 +146,7 @@ const TaskRunDetailPage = async ({ params }: { params: Promise<{ runId: string }
           {tasks.length === 0 ? (
             <p className="text-sm text-white/60">本次集合下暂无任务记录。</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px] text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-white/50">
-                    <th className="pb-2 pr-4 font-medium">关键词</th>
-                    <th className="pb-2 pr-4 font-medium">来源</th>
-                    <th className="pb-2 pr-4 font-medium">地区</th>
-                    <th className="pb-2 pr-4 font-medium">时间范围</th>
-                    <th className="pb-2 pr-4 font-medium">状态</th>
-                    <th className="pb-2 pr-4 font-medium">提交时间</th>
-                    <th className="pb-2 pr-4 font-medium">完成时间</th>
-                    <th className="pb-2 pr-4 font-medium">费用 (USD)</th>
-                    <th className="pb-2 pr-4 font-medium">错误信息</th>
-                    <th className="pb-2 pr-4 font-medium">详情</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tasks.map((task) => {
-                    const metadata = task.metadata;
-                    let sourceLabel = "根关键词";
-                    if (metadata?.source === "rising") {
-                      sourceLabel = "扩展";
-                    } else if (metadata?.seed_origin === "news") {
-                      sourceLabel = "新闻种子";
-                    }
-                    const statusStyle = statusStyles[task.status] ?? "bg-white/10 text-white/80";
-
-                    return (
-                      <tr key={task.taskId} className="border-b border-white/5 last:border-none">
-                        <td className="py-3 pr-4 text-white">
-                          <div className="font-medium">{task.keyword}</div>
-                          {metadata?.root_label ? (
-                            <div className="text-xs text-white/50">{metadata.root_label}</div>
-                          ) : null}
-                        </td>
-                        <td className="py-3 pr-4 text-white/70">{sourceLabel}</td>
-                        <td className="py-3 pr-4 text-white/70">{task.locale?.toUpperCase() || "—"}</td>
-                        <td className="py-3 pr-4 text-white/70">
-                          {metadata?.time_range ?? decodeURIComponent(task.timeframe)}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusStyle}`}>
-                            {statusLabels[task.status] ?? task.status}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4 text-white/60">{formatDateTime(task.postedAt)}</td>
-                        <td className="py-3 pr-4 text-white/60">{formatDateTime(task.completedAt)}</td>
-                        <td className="py-3 pr-4 text-white/70">
-                          {typeof task.cost === "number" ? formatUSD(task.cost) : "—"}
-                        </td>
-                        <td className="py-3 pr-4 text-xs text-rose-300">
-                          {task.errorMessage ?? (task.status === "error" ? "无详细错误信息" : "—")}
-                        </td>
-                        <td className="py-3 pr-4 text-xs text-white/70">
-                          <Link
-                            href={`/tasks/${run.id}/${task.taskId}`}
-                            className="inline-flex items-center text-xs font-medium text-emerald-300 underline decoration-dotted underline-offset-4 hover:text-emerald-200"
-                          >
-                            打开详情页
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <RunTasksTable runId={run.id} tasks={tasks} />
           )}
         </CardContent>
       </Card>

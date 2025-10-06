@@ -36,6 +36,8 @@ const baseSchema = z
     DATAFORSEO_LOGIN: z.string().optional(),
     DATAFORSEO_PASSWORD: z.string().optional(),
     DATAFORSEO_BASE_URL: z.string().url().optional().default("https://api.dataforseo.com/v3"),
+    OPENROUTER_API_KEY: z.string().optional(),
+    OPENROUTER_MODEL: z.string().optional().default("anthropic/claude-3-haiku"),
     AI_TRENDS_DEVELOPED_MARKETS: z
       .string()
       .optional()
@@ -51,6 +53,11 @@ const baseSchema = z
     AI_TRENDS_ADMIN_USERNAME: z.string().optional(),
     AI_TRENDS_ADMIN_PASSWORD: z.string().optional(),
     AI_TRENDS_SESSION_SECRET: z.string().optional(),
+    AI_TRENDS_CANDIDATE_TTL_HOURS: z.string().optional(),
+    AI_TRENDS_CANDIDATE_LLM_BATCH: z.string().optional(),
+    AI_TRENDS_CANDIDATE_MAX_TOTAL: z.string().optional(),
+    AI_TRENDS_CANDIDATE_MAX_PER_SOURCE: z.string().optional(),
+    AI_TRENDS_NEWS_CANDIDATES_PER_ITEM: z.string().optional(),
   })
   .transform((values) => ({
     ...values,
@@ -60,6 +67,51 @@ const baseSchema = z
       values.AI_TRENDS_NEWS_FEEDS?.split(",").map((item) => item.trim()).filter(Boolean) ?? DEFAULT_NEWS_FEEDS,
     AI_TRENDS_NEWS_MAX_ITEMS_NUMBER: (() => {
       const raw = values.AI_TRENDS_NEWS_MAX_ITEMS;
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })(),
+    AI_TRENDS_CANDIDATE_TTL_HOURS_NUMBER: (() => {
+      const raw = values.AI_TRENDS_CANDIDATE_TTL_HOURS;
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })(),
+    AI_TRENDS_CANDIDATE_LLM_BATCH_NUMBER: (() => {
+      const raw = values.AI_TRENDS_CANDIDATE_LLM_BATCH;
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })(),
+    AI_TRENDS_CANDIDATE_MAX_TOTAL_NUMBER: (() => {
+      const raw = values.AI_TRENDS_CANDIDATE_MAX_TOTAL;
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })(),
+    AI_TRENDS_CANDIDATE_MAX_PER_SOURCE_NUMBER: (() => {
+      const raw = values.AI_TRENDS_CANDIDATE_MAX_PER_SOURCE;
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    })(),
+    AI_TRENDS_NEWS_CANDIDATES_PER_ITEM_NUMBER: (() => {
+      const raw = values.AI_TRENDS_NEWS_CANDIDATES_PER_ITEM;
       if (!raw) {
         return null;
       }
@@ -102,3 +154,10 @@ export const developedMarkets = env.AI_TRENDS_DEVELOPED_MARKETS_LIST as string[]
 export const trendTimeframes = env.AI_TRENDS_TIMEFRAMES_LIST as string[];
 export const newsFeedUrls = env.AI_TRENDS_NEWS_FEEDS_LIST as string[];
 export const newsMaxItems = env.AI_TRENDS_NEWS_MAX_ITEMS_NUMBER as number | null;
+export const openRouterApiKey = env.OPENROUTER_API_KEY as string | undefined;
+export const openRouterModel = env.OPENROUTER_MODEL as string | undefined;
+export const candidateTtlHours = env.AI_TRENDS_CANDIDATE_TTL_HOURS_NUMBER ?? 72;
+export const candidateLlmBatchSize = env.AI_TRENDS_CANDIDATE_LLM_BATCH_NUMBER ?? 8;
+export const candidateMaxTotal = env.AI_TRENDS_CANDIDATE_MAX_TOTAL_NUMBER ?? 120;
+export const candidateMaxPerSource = env.AI_TRENDS_CANDIDATE_MAX_PER_SOURCE_NUMBER ?? 40;
+export const newsCandidateMaxPerItem = env.AI_TRENDS_NEWS_CANDIDATES_PER_ITEM_NUMBER ?? 5;

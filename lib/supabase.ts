@@ -33,6 +33,9 @@ export type TrendRunRow = Database["public"]["Tables"]["ai_trends_runs"]["Row"];
 export type TrendRunInsert = Database["public"]["Tables"]["ai_trends_runs"]["Insert"];
 export type TrendRunUpdate = Database["public"]["Tables"]["ai_trends_runs"]["Update"];
 export type NewsItemRow = Database["public"]["Tables"]["ai_trends_news"]["Row"];
+export type CandidateRootRow = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Row"];
+export type CandidateRootInsert = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Insert"];
+export type CandidateRootUpdate = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Update"];
 
 export const getLatestKeywords = async (params: { timeframe?: string; limit?: number }) => {
   const client = getSupabaseAdmin();

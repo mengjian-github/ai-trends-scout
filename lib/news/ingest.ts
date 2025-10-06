@@ -1,7 +1,8 @@
 import Parser from "rss-parser";
 
-import { newsFeedUrls, newsMaxItems } from "@/lib/env";
+import { newsCandidateMaxPerItem, newsFeedUrls, newsMaxItems } from "@/lib/env";
 import { getActiveRoots, getSupabaseAdmin, type TrendRootRow } from "@/lib/supabase";
+import type { RawCandidateEntry } from "@/lib/services/candidates";
 import type { Database, Json } from "@/types/supabase";
 import { NEWS_KEYWORD_WINDOW_HOURS } from "@/lib/trends/constants";
 import { normalizeKeyword } from "@/lib/trends/utils";
@@ -19,13 +20,14 @@ type RssItem = {
   creator?: string;
 };
 
-type IngestStats = {
+export type IngestStats = {
   feedsProcessed: number;
   inserted: number;
   updated: number;
   skipped: number;
   errors: Array<{ feed: string; error: string }>;
   keywordsDetected: number;
+  candidateRoots: RawCandidateEntry[];
 };
 
 type CandidateNewsItem = {
@@ -234,11 +236,46 @@ const extractKeywords = (params: {
 };
 
 const DEFAULT_NEWS_WINDOW_MS = NEWS_KEYWORD_WINDOW_HOURS * 60 * 60 * 1000;
+const MAX_CANDIDATES_PER_ITEM = newsCandidateMaxPerItem > 0 ? newsCandidateMaxPerItem : 5;
+const NEWS_CANDIDATE_EXCLUDES = new Set([
+  "ai",
+  "人工智能",
+  "machine learning",
+  "artificial intelligence",
+  "news",
+  "最新",
+  "report",
+  "update",
+]);
+
+const looksLikeNewsCandidate = (keyword: string) => {
+  if (NEWS_CANDIDATE_EXCLUDES.has(keyword)) {
+    return false;
+  }
+
+  if (keyword.length < 4 || keyword.length > 80) {
+    return false;
+  }
+
+  if (!/[a-zA-Z0-9]/.test(keyword)) {
+    return false;
+  }
+
+  return true;
+};
 
 export const ingestNewsFeeds = async (): Promise<IngestStats> => {
   const feeds = newsFeedUrls.length > 0 ? newsFeedUrls : [];
   if (feeds.length === 0) {
-    return { feedsProcessed: 0, inserted: 0, updated: 0, skipped: 0, errors: [], keywordsDetected: 0 };
+    return {
+      feedsProcessed: 0,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      errors: [],
+      keywordsDetected: 0,
+      candidateRoots: [],
+    };
   }
 
   const client = getSupabaseAdmin();
@@ -256,11 +293,13 @@ export const ingestNewsFeeds = async (): Promise<IngestStats> => {
     skipped: 0,
     errors: [],
     keywordsDetected: 0,
+    candidateRoots: [],
   };
 
   const maxItems = newsMaxItems && Number.isFinite(newsMaxItems) ? newsMaxItems : 60;
   const cutoffMs = Date.now() - DEFAULT_NEWS_WINDOW_MS;
   const seenUrls = new Set<string>();
+  const seenCandidateKeywords = new Set<string>();
   const candidates: CandidateNewsItem[] = [];
 
   for (const feedUrl of feeds) {
@@ -299,7 +338,7 @@ export const ingestNewsFeeds = async (): Promise<IngestStats> => {
           continue;
         }
 
-        const { keywords, keywordCount, hasAiSignal } = extractKeywords({
+        const { keywords, keywordCount } = extractKeywords({
           item,
           title,
           summary: summary ?? "",
@@ -307,12 +346,55 @@ export const ingestNewsFeeds = async (): Promise<IngestStats> => {
           rootKeywordSet,
         });
 
-        if (!hasAiSignal) {
+        if (!keywordCount) {
           stats.skipped += 1;
           continue;
         }
 
         stats.keywordsDetected += keywordCount;
+
+        const candidateKeywords = Array.from(new Set(keywords)).filter((keyword) =>
+          looksLikeNewsCandidate(keyword)
+        );
+
+        if (candidateKeywords.length > 0) {
+          const selected: string[] = [];
+          for (const candidateKeyword of candidateKeywords) {
+            const normalizedCandidate = normalizeKeyword(candidateKeyword);
+            if (!normalizedCandidate) {
+              continue;
+            }
+            if (rootKeywordSet.has(normalizedCandidate)) {
+              continue;
+            }
+            if (seenCandidateKeywords.has(normalizedCandidate)) {
+              continue;
+            }
+
+            selected.push(candidateKeyword);
+            seenCandidateKeywords.add(normalizedCandidate);
+
+            if (selected.length >= MAX_CANDIDATES_PER_ITEM) {
+              break;
+            }
+          }
+
+          for (const candidateKeyword of selected) {
+            stats.candidateRoots.push({
+              term: candidateKeyword,
+              source: "news_keyword",
+              title,
+              summary,
+              tags: item.categories ?? [],
+              url: link,
+              capturedAt: publishedAt,
+              metadata: {
+                news_id: item.guid ?? null,
+                feed_url: feedUrl,
+              },
+            });
+          }
+        }
 
         const candidate: CandidateNewsItem = {
           title,

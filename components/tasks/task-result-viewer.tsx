@@ -1,4 +1,14 @@
-import type { NormalizedTaskResult, ExploreGraphPoint, ExploreItem } from "@/lib/tasks/dataforseo";
+"use client";
+
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
+
+import type {
+  NormalizedTaskResult,
+  ExploreGraphPoint,
+  ExploreItem,
+  ExploreMapEntry,
+  ExploreRankedQuery,
+} from "@/lib/tasks/dataforseo";
 import { normalizeTaskResults } from "@/lib/tasks/dataforseo";
 import type { RunTaskItem } from "@/types/tasks";
 import { format } from "date-fns";
@@ -110,6 +120,15 @@ const formatValue = (value: number | undefined) => {
   return value.toFixed(0);
 };
 
+const paginationSelectClass =
+  "rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs text-white focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400";
+const subtleButtonClass =
+  "rounded-md border border-white/10 px-3 py-1 text-xs font-medium text-white/80 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:border-white/5 disabled:text-white/40";
+
+const TABLE_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const DEFAULT_MAP_PAGE_SIZE = TABLE_PAGE_SIZE_OPTIONS[0];
+const DEFAULT_QUERY_PAGE_SIZE = TABLE_PAGE_SIZE_OPTIONS[0];
+
 const renderSparkBars = (points: ExploreGraphPoint[]) => {
   if (points.length === 0) {
     return <p className="text-xs text-white/50">暂无时间序列数据。</p>;
@@ -188,8 +207,127 @@ const renderGraphItem = (item: Extract<ExploreItem, { type: "google_trends_graph
   );
 };
 
-const renderMapItem = (item: Extract<ExploreItem, { type: "google_trends_map" }>) => {
-  const entries = [...item.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 5);
+const MapTable = ({ entries }: { entries: ExploreMapEntry[] }) => {
+  const total = entries.length;
+  const [pageSize, setPageSize] = useState(DEFAULT_MAP_PAGE_SIZE);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = useMemo(() => (total === 0 ? 1 : Math.ceil(total / pageSize)), [total, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [entries]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return entries.slice(startIndex, startIndex + pageSize);
+  }, [entries, currentPage, pageSize]);
+
+  const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextSize = Number(event.target.value);
+    setPageSize(nextSize);
+    setCurrentPage(1);
+  };
+
+  const handlePrevPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+  };
+
+  const firstItemIndex = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const lastItemIndex = Math.min(total, currentPage * pageSize);
+
+  if (total === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        <table className="min-w-[460px] w-full text-left text-xs text-white/70">
+          <thead>
+            <tr className="text-white/50">
+              <th className="pb-2 pr-4 font-medium">地区</th>
+              <th className="pb-2 pr-4 font-medium">值</th>
+              <th className="pb-2 pr-4 font-medium">最大值索引</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginatedEntries.map((entry, index) => {
+              const rowKey = entry.geoId ?? entry.geoName ?? `${index}-${currentPage}`;
+              return (
+                <tr key={rowKey} className="border-b border-white/5 last:border-none">
+                  <td className="py-2 pr-4 text-white">
+                    <div className="font-medium text-white/90">
+                      {entry.geoName ?? "未知"}
+                      {(() => {
+                        const zhName = toChineseRegionName(entry.geoId, entry.geoName);
+                        if (!zhName || zhName === entry.geoName) {
+                          return null;
+                        }
+                        return <span className="ml-2 text-xs text-white/60">（{zhName}）</span>;
+                      })()}
+                    </div>
+                    <div className="text-[10px] uppercase text-white/40">{entry.geoId ?? "—"}</div>
+                  </td>
+                  <td className="py-2 pr-4 text-sm text-white/80">{formatValue(entry.value)}</td>
+                  <td className="py-2 pr-4 text-xs text-white/50">{entry.maxValueIndex ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-col gap-3 text-[11px] text-white/60 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2">
+          <span>每页显示</span>
+          <select className={paginationSelectClass} value={pageSize} onChange={handlePageSizeChange}>
+            {TABLE_PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <span>条</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            显示第 {firstItemIndex} - {lastItemIndex} 条（共 {total} 条）
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={handlePrevPage} className={subtleButtonClass} disabled={currentPage === 1}>
+              上一页
+            </button>
+            <span>第 {currentPage} / {totalPages} 页</span>
+            <button
+              type="button"
+              onClick={handleNextPage}
+              className={subtleButtonClass}
+              disabled={currentPage === totalPages}
+            >
+              下一页
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MapItem = ({ item }: { item: Extract<ExploreItem, { type: "google_trends_map" }> }) => {
+  const entries = useMemo(
+    () => [...item.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)),
+    [item.data]
+  );
 
   if (entries.length === 0) {
     return null;
@@ -201,73 +339,123 @@ const renderMapItem = (item: Extract<ExploreItem, { type: "google_trends_map" }>
         <p className="text-sm font-medium text-white/90">{item.title ?? "地区热度分布"}</p>
         <p className="text-xs text-white/50">关键词：{item.keywords.join("，")}</p>
       </header>
-      <div className="overflow-x-auto">
-        <table className="min-w-[460px] w-full text-left text-xs text-white/70">
-          <thead>
-            <tr className="text-white/50">
-              <th className="pb-2 pr-4 font-medium">地区</th>
-              <th className="pb-2 pr-4 font-medium">值</th>
-              <th className="pb-2 pr-4 font-medium">最大值索引</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry, index) => (
-              <tr key={`${entry.geoId ?? entry.geoName ?? index}`} className="border-b border-white/5 last:border-none">
-                <td className="py-2 pr-4 text-white">
-                  <div className="font-medium text-white/90">
-                    {entry.geoName ?? "未知"}
-                    {(() => {
-                      const zhName = toChineseRegionName(entry.geoId, entry.geoName);
-                      if (!zhName || zhName === entry.geoName) {
-                        return null;
-                      }
-                      return <span className="ml-2 text-xs text-white/60">（{zhName}）</span>;
-                    })()}
-                  </div>
-                  <div className="text-[10px] uppercase text-white/40">{entry.geoId ?? "—"}</div>
-                </td>
-                <td className="py-2 pr-4 text-sm text-white/80">{formatValue(entry.value)}</td>
-                <td className="py-2 pr-4 text-xs text-white/50">{entry.maxValueIndex ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <MapTable entries={entries} />
     </section>
   );
 };
 
-const renderQueriesItem = (item: Extract<ExploreItem, { type: "google_trends_queries_list" }>) => {
-  if (item.top.length === 0 && item.rising.length === 0) {
+const QueriesTable = ({ queries }: { queries: ExploreRankedQuery[] }) => {
+  const total = queries.length;
+  const [pageSize, setPageSize] = useState(DEFAULT_QUERY_PAGE_SIZE);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = useMemo(() => (total === 0 ? 1 : Math.ceil(total / pageSize)), [total, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [queries]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedQueries = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return queries.slice(startIndex, startIndex + pageSize);
+  }, [queries, currentPage, pageSize]);
+
+  const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextSize = Number(event.target.value);
+    setPageSize(nextSize);
+    setCurrentPage(1);
+  };
+
+  const handlePrevPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+  };
+
+  const firstItemIndex = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const lastItemIndex = Math.min(total, currentPage * pageSize);
+
+  if (total === 0) {
     return null;
   }
 
-  const renderQueryTable = (queries: typeof item.top) => (
-    <table className="min-w-[360px] w-full text-left text-xs text-white/70">
-      <thead>
-        <tr className="text-white/50">
-          <th className="pb-2 pr-4 font-medium">查询</th>
-          <th className="pb-2 pr-4 font-medium">热度</th>
-        </tr>
-      </thead>
-      <tbody>
-        {queries.map((query, index) => {
-          const valueNumber = typeof query.value === "number" ? query.value : undefined;
-          const highlight = valueNumber !== undefined && valueNumber >= 100;
-
-          return (
-            <tr
-              key={`${query.query ?? index}`}
-              className={clsx("border-b border-white/5 last:border-none", highlight && "bg-emerald-500/10")}
-            >
-              <td className={clsx("py-2 pr-4 text-white", highlight && "font-semibold")}>{query.query ?? "—"}</td>
-              <td className={clsx("py-2 pr-4", highlight ? "text-emerald-200 font-semibold" : "text-white/80")}>{formatValue(query.value)}</td>
+  return (
+    <div className="mt-2 space-y-3">
+      <div className="overflow-x-auto">
+        <table className="min-w-[360px] w-full text-left text-xs text-white/70">
+          <thead>
+            <tr className="text-white/50">
+              <th className="pb-2 pr-4 font-medium">查询</th>
+              <th className="pb-2 pr-4 font-medium">热度</th>
             </tr>
-          );
-        })}
-      </tbody>
-    </table>
+          </thead>
+          <tbody>
+            {paginatedQueries.map((query, index) => {
+              const valueNumber = typeof query.value === "number" ? query.value : undefined;
+              const highlight = valueNumber !== undefined && valueNumber >= 100;
+              const rowKey = query.query ?? `${index}-${currentPage}`;
+
+              return (
+                <tr
+                  key={rowKey}
+                  className={clsx("border-b border-white/5 last:border-none", highlight && "bg-emerald-500/10")}
+                >
+                  <td className={clsx("py-2 pr-4 text-white", highlight && "font-semibold")}>{query.query ?? "—"}</td>
+                  <td className={clsx("py-2 pr-4", highlight ? "text-emerald-200 font-semibold" : "text-white/80")}>{formatValue(query.value)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-col gap-3 text-[11px] text-white/60 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2">
+          <span>每页显示</span>
+          <select className={paginationSelectClass} value={pageSize} onChange={handlePageSizeChange}>
+            {TABLE_PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <span>条</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            显示第 {firstItemIndex} - {lastItemIndex} 条（共 {total} 条）
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={handlePrevPage} className={subtleButtonClass} disabled={currentPage === 1}>
+              上一页
+            </button>
+            <span>第 {currentPage} / {totalPages} 页</span>
+            <button
+              type="button"
+              onClick={handleNextPage}
+              className={subtleButtonClass}
+              disabled={currentPage === totalPages}
+            >
+              下一页
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
+};
+
+const QueriesItem = ({ item }: { item: Extract<ExploreItem, { type: "google_trends_queries_list" }> }) => {
+  if (item.top.length === 0 && item.rising.length === 0) {
+    return null;
+  }
 
   return (
     <section className="space-y-3">
@@ -279,13 +467,13 @@ const renderQueriesItem = (item: Extract<ExploreItem, { type: "google_trends_que
         {item.top.length > 0 ? (
           <div className="rounded-lg border border-white/10 bg-black/30 p-3">
             <p className="text-xs font-medium text-white/80">Top</p>
-            <div className="mt-2 overflow-x-auto">{renderQueryTable(item.top.slice(0, 20))}</div>
+            <QueriesTable queries={item.top} />
           </div>
         ) : null}
         {item.rising.length > 0 ? (
           <div className="rounded-lg border border-white/10 bg-black/30 p-3">
             <p className="text-xs font-medium text-white/80">Rising</p>
-            <div className="mt-2 overflow-x-auto">{renderQueryTable(item.rising.slice(0, 20))}</div>
+            <QueriesTable queries={item.rising} />
           </div>
         ) : null}
       </div>
@@ -314,7 +502,11 @@ const renderExploreItem = (item: ExploreItem) => {
   }
 
   if (item.type === "google_trends_map") {
-    return renderMapItem(item as Extract<ExploreItem, { type: "google_trends_map" }>);
+    return (
+      <MapItem
+        item={item as Extract<ExploreItem, { type: "google_trends_map" }>}
+      />
+    );
   }
 
   if (item.type === "google_trends_topics_list") {
@@ -322,7 +514,11 @@ const renderExploreItem = (item: ExploreItem) => {
   }
 
   if (item.type === "google_trends_queries_list") {
-    return renderQueriesItem(item as Extract<ExploreItem, { type: "google_trends_queries_list" }>);
+    return (
+      <QueriesItem
+        item={item as Extract<ExploreItem, { type: "google_trends_queries_list" }>}
+      />
+    );
   }
 
   return renderUnknownItem(item as Extract<ExploreItem, { type: string; raw: unknown }>);

@@ -20,8 +20,15 @@ export const TriggerNewsIngestButton = () => {
       try {
         const result = await triggerNewsIngest();
         if (result) {
-          const summary = `已更新 ${result.inserted} 条新闻，刷新 ${result.updated} 条，忽略 ${result.skipped} 条。`;
-          setMessage(summary);
+          const news = result.news;
+          const candidates = result.candidates;
+          const llm = result.llm;
+          const newsSummary = `新闻：新增 ${news.inserted} · 更新 ${news.updated} · 忽略 ${news.skipped}`;
+          const candidateSummary = `候选：采集 ${candidates.attempted} · 入库 ${candidates.upserted}`;
+          const llmSummary = llm.enabled
+            ? `LLM 通过 ${llm.approved} · 拒绝 ${llm.rejected} · 待定 ${llm.pending}`
+            : "LLM 未启用";
+          setMessage(`${newsSummary} ｜ ${candidateSummary} ｜ ${llmSummary}`);
           router.refresh();
         } else {
           setMessage("触发失败，请稍后重试。");
@@ -42,4 +49,3 @@ export const TriggerNewsIngestButton = () => {
     </div>
   );
 };
-

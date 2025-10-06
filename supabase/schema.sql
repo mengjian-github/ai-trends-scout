@@ -72,6 +72,39 @@ create table if not exists ai_trends_news (
 create index if not exists ai_trends_news_published_idx
   on ai_trends_news (published_at desc);
 
+create table if not exists ai_trends_candidate_roots (
+  id uuid primary key default uuid_generate_v4(),
+  term text not null,
+  term_normalized text not null,
+  source text not null,
+  status text not null default 'pending',
+  raw_title text,
+  raw_summary text,
+  raw_tags text[],
+  url text,
+  captured_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '72 hours'),
+  llm_label text,
+  llm_score numeric,
+  llm_reason text,
+  llm_attempts integer not null default 0,
+  llm_last_attempt timestamptz,
+  rejection_reason text,
+  queried_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists ai_trends_candidate_roots_unique_term_source_idx
+  on ai_trends_candidate_roots (term_normalized, source);
+
+create index if not exists ai_trends_candidate_roots_status_idx
+  on ai_trends_candidate_roots (status, captured_at desc);
+
+create index if not exists ai_trends_candidate_roots_expires_idx
+  on ai_trends_candidate_roots (expires_at desc);
+
 create table if not exists ai_trends_notifications (
   id uuid primary key default uuid_generate_v4(),
   rule_name text not null,
@@ -126,3 +159,28 @@ create table if not exists ai_trends_tasks (
 
 create unique index if not exists ai_trends_tasks_task_id_idx on ai_trends_tasks (task_id);
 create index if not exists ai_trends_tasks_run_id_idx on ai_trends_tasks (run_id);
+
+create or replace function prune_ai_trends_tasks(retention_days integer default 7)
+returns integer
+language plpgsql
+as $$
+declare
+  effective_days integer := coalesce(retention_days, 7);
+  deleted_count integer := 0;
+begin
+  if effective_days < 1 then
+    effective_days := 1;
+  elsif effective_days > 90 then
+    effective_days := 90;
+  end if;
+
+  delete from ai_trends_tasks
+  where created_at < now() - make_interval(days => effective_days);
+
+  get diagnostics deleted_count = row_count;
+
+  return deleted_count;
+end;
+$$;
+
+comment on function prune_ai_trends_tasks(integer) is 'Removes ai_trends_tasks rows older than the retention window and returns the number of rows deleted.';

@@ -101,6 +101,28 @@ const MetadataSummary = ({ metadata }: { metadata?: TaskMetadata }) => {
     entries.push(["种子来源", originLabel]);
   }
 
+  if (metadata.seed_origin === "candidate") {
+    if (metadata.candidate_source) {
+      entries.push(["候选来源", metadata.candidate_source]);
+    }
+    if (typeof metadata.candidate_llm_score === "number") {
+      entries.push([
+        "候选评分",
+        metadata.candidate_llm_score.toFixed(2),
+      ]);
+    }
+    if (metadata.candidate_llm_label) {
+      entries.push(["候选判定", metadata.candidate_llm_label]);
+    }
+    if (metadata.candidate_captured_at) {
+      const capturedDate = new Date(metadata.candidate_captured_at);
+      const formattedCaptured = Number.isNaN(capturedDate.getTime())
+        ? metadata.candidate_captured_at
+        : capturedDate.toLocaleString("zh-CN", { hour12: false });
+      entries.push(["候选记录时间", formattedCaptured]);
+    }
+  }
+
   if (typeof metadata.baseline === "string" && metadata.baseline.trim().length > 0) {
     entries.push(["基准词", metadata.baseline]);
   }

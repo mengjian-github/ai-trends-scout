@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BarChart3, BrainCircuit, ClipboardList, LogOut, Newspaper, Settings } from "lucide-react";
+import { BarChart3, BrainCircuit, ClipboardList, LogOut, Newspaper, Settings, Sparkles } from "lucide-react";
 
 const navItems = [
   { href: "/overview", label: "概览", icon: BarChart3 },
   { href: "/tasks", label: "任务", icon: ClipboardList },
   { href: "/keywords", label: "关键词", icon: BrainCircuit },
   { href: "/news", label: "新闻", icon: Newspaper },
+  { href: "/candidates", label: "候选词根", icon: Sparkles },
   { href: "/settings", label: "设置", icon: Settings },
 ];
 

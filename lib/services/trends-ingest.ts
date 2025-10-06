@@ -18,6 +18,12 @@ import {
   type TrendRunRow,
   type TrendKeywordRow,
 } from "@/lib/supabase";
+import {
+  expireStaleCandidates,
+  fetchApprovedCandidateRoots,
+  markCandidatesQueued,
+  type CandidateSeed,
+} from "@/lib/services/candidates";
 import type { Json } from "@/types/supabase";
 import { normalizeTaskResults } from "@/lib/tasks/dataforseo";
 import type { ExploreItem } from "@/lib/tasks/dataforseo";
@@ -247,7 +253,7 @@ const ALL_ITEM_TYPES = [
   "google_trends_queries_list",
 ];
 
-const MAX_DISCOVERY_DEPTH = 3;
+const MAX_DISCOVERY_DEPTH = 2;
 const NEW_KEYWORD_MAX_AGE_DAYS = Math.ceil(NEW_KEYWORD_MAX_AGE_MS / (24 * 60 * 60 * 1000));
 
 const chunkArray = <T,>(items: T[], size: number): T[][] => {
@@ -952,6 +958,7 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
   const postbackUrl = buildPostbackUrl(callbackUrl);
 
   const roots: TrendRootRow[] = await getActiveRoots();
+  await expireStaleCandidates();
   const markets = parseMarkets();
   const fallbackMarketKey = markets.find((market) => market !== "global") ?? "us";
   const timeframes = parseTimeframes();
@@ -969,9 +976,25 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
     seenKeywords: seenSeedKeywords,
   });
 
+  const candidateSeeds = await fetchApprovedCandidateRoots({ limit: 40 });
+
   const rootKeywords = roots.map((item) => item.keyword);
   const newsKeywords = newsSeeds.map((seed) => seed.keyword);
   const seedKeywords = [...rootKeywords, ...newsKeywords];
+
+  const selectedCandidateSeeds: CandidateSeed[] = [];
+  const candidateKeywords: string[] = [];
+  for (const candidate of candidateSeeds) {
+    const normalized = normalizeKeyword(candidate.term);
+    if (!normalized || seenSeedKeywords.has(normalized)) {
+      continue;
+    }
+
+    seenSeedKeywords.add(normalized);
+    seedKeywords.push(candidate.term);
+    candidateKeywords.push(candidate.term);
+    selectedCandidateSeeds.push(candidate);
+  }
 
   if (seedKeywords.length === 0) {
     return {
@@ -983,14 +1006,23 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
     };
   }
 
+  const candidateSourceCounts = selectedCandidateSeeds.reduce<Record<string, number>>((acc, seed) => {
+    const key = seed.source ?? "unknown";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
   const runMetadata = {
     markets,
     timeframes,
     root_count: roots.length,
     news_keyword_count: newsSeeds.length,
+    candidate_root_count: selectedCandidateSeeds.length,
     news_keyword_window_hours: NEWS_KEYWORD_WINDOW_HOURS,
     seed_keyword_total: seedKeywords.length,
     news_keywords: newsKeywords,
+    candidate_keywords: candidateKeywords,
+    candidate_sources: candidateSourceCounts,
   } satisfies Record<string, unknown>;
 
   let run: TrendRunRow;
@@ -1159,7 +1191,57 @@ export const queueRootTasks = async (options: { callbackUrl: string }) => {
     }
   }
 
+  for (const candidate of selectedCandidateSeeds) {
+    const rootLabel = `${candidate.term} · ${candidate.source ?? "candidate"}`;
+    for (const timeframe of timeframes) {
+      const metadata: TaskMetadata = {
+        source: "root",
+        root_id: candidate.id,
+        root_keyword: candidate.term,
+        root_label: rootLabel,
+        discovery_depth: 0,
+        locale: "global",
+        time_range: timeframe,
+        location_name: "Global",
+        seed_origin: "candidate",
+        candidate_id: candidate.id,
+        candidate_source: candidate.source ?? null,
+        candidate_llm_label: candidate.label ?? null,
+        candidate_llm_score: candidate.score ?? null,
+        candidate_captured_at: candidate.capturedAt ?? null,
+      };
+
+      const payload: ExploreTaskPayload = {
+        time_range: timeframe,
+        keywords: [candidate.term],
+        postback_url: postbackUrl,
+        item_types: ALL_ITEM_TYPES,
+      };
+
+      queued.push({
+        runId,
+        keyword: candidate.term,
+        locale: "global",
+        timeframe,
+        payload,
+        metadata,
+      });
+    }
+  }
+
   const { posted, errors } = await postExploreTasks(queued);
+
+  const postedCandidateIds = new Set<string>();
+  for (const item of posted) {
+    const candidateId = item.queue.metadata.candidate_id;
+    if (typeof candidateId === "string" && candidateId.trim().length > 0) {
+      postedCandidateIds.add(candidateId);
+    }
+  }
+
+  if (postedCandidateIds.size > 0) {
+    await markCandidatesQueued(Array.from(postedCandidateIds));
+  }
 
   const nowIso = new Date().toISOString();
   const runStatus = posted.length === 0 ? "failed" : errors.length > 0 ? "running_with_errors" : "running";

@@ -20,6 +20,11 @@ export type TaskMetadata = {
   news_source?: string | null;
   news_title?: string | null;
   news_published_at?: string | null;
+  candidate_id?: string;
+  candidate_source?: string | null;
+  candidate_llm_label?: string | null;
+  candidate_llm_score?: number | null;
+  candidate_captured_at?: string | null;
   locale?: string;
   time_range?: string;
   location_name?: string;
