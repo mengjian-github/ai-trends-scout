@@ -9,6 +9,75 @@ import type { HotKeyword } from "@/types/trends";
 import { formatNumber } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
+type DemandAssessment = {
+  label: string | null;
+  score: number | null;
+  summary: string | null;
+};
+
+const extractDemandAssessment = (keyword: HotKeyword): DemandAssessment | null => {
+  const metadata = keyword.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const demand = (metadata as Record<string, unknown>).demand_assessment;
+  if (!demand || typeof demand !== "object" || Array.isArray(demand)) {
+    return null;
+  }
+
+  const { label, score, summary } = demand as {
+    label?: unknown;
+    score?: unknown;
+    summary?: unknown;
+  };
+
+  const normalizedSummary = typeof summary === "string" ? summary.trim() : null;
+  return {
+    label: typeof label === "string" ? label : null,
+    score: typeof score === "number" && Number.isFinite(score) ? score : null,
+    summary: normalizedSummary && normalizedSummary.length > 0 ? normalizedSummary : null,
+  };
+};
+
+const renderDemandBadge = (assessment: DemandAssessment | null) => {
+  if (!assessment) {
+    return null;
+  }
+
+  const labelText = (() => {
+    if (assessment.label === "tool") {
+      return "工具需求";
+    }
+    if (assessment.label === "non_tool") {
+      return "非工具需求";
+    }
+    if (assessment.label === "unclear") {
+      return "待确认";
+    }
+    return null;
+  })();
+
+  if (!labelText) {
+    return null;
+  }
+
+  const toneClass = assessment.label === "tool"
+    ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"
+    : assessment.label === "non_tool"
+    ? "bg-rose-500/10 text-rose-200 border border-rose-500/30"
+    : "bg-amber-500/10 text-amber-200 border border-amber-500/30";
+
+  const scoreText = assessment.score !== null ? ` · 可信度 ${assessment.score.toFixed(2)}` : "";
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${toneClass}`}>
+      {labelText}
+      {scoreText}
+    </span>
+  );
+};
+
 const countryLabels: Record<string, string> = {
   us: "美国",
   gb: "英国",
@@ -123,6 +192,14 @@ export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) 
                 <tbody>
                   {paginatedKeywords.map((item, index) => {
                     const rank = (currentPage - 1) * pageSize + index + 1;
+                    const demandAssessment = extractDemandAssessment(item);
+                    const demandSummary = (() => {
+                      if (typeof item.summary === "string" && item.summary.trim().length > 0) {
+                        return item.summary.trim();
+                      }
+                      return demandAssessment?.summary ?? null;
+                    })();
+                    const demandBadge = renderDemandBadge(demandAssessment);
                     return (
                       <tr key={item.id} className="border-b border-white/5 last:border-none">
                         <td className="py-3 pr-4 text-white/60">第{rank}名</td>
@@ -136,8 +213,13 @@ export const HotlistTable = ({ title, timeframe, keywords }: HotlistTableProps) 
                             >
                               {item.keyword}
                             </a>
-                            {item.summary ? (
-                              <span className="text-xs text-white/50">{item.summary}</span>
+                            {demandBadge || demandSummary ? (
+                              <div className="mt-1 flex flex-col gap-1">
+                                {demandBadge}
+                                {demandSummary ? (
+                                  <span className="text-xs text-white/60">{demandSummary}</span>
+                                ) : null}
+                              </div>
                             ) : null}
                           </div>
                         </td>
