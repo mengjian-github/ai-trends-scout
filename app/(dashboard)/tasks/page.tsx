@@ -58,10 +58,12 @@ const formatUSD = (value: number) =>
 const TaskRunsPage = async () => {
   const runs = await resolveTaskRunList();
 
+  const lastTriggeredAt = runs.length > 0 ? runs[0]?.triggeredAt ?? null : null;
+
   return (
     <div className="space-y-8">
       <section className="flex justify-end">
-        <TriggerRunButton />
+        <TriggerRunButton lastTriggeredAt={lastTriggeredAt} />
       </section>
 
       <section>

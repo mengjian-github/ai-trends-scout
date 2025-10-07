@@ -8,12 +8,38 @@ import { triggerTrendsRun } from "@/app/(dashboard)/tasks/actions";
 const buttonBase =
   "inline-flex items-center justify-center rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40 hover:bg-white/10";
 
-export const TriggerRunButton = () => {
+const CONFIRM_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+type TriggerRunButtonProps = {
+  lastTriggeredAt?: string | null;
+};
+
+const shouldConfirmBeforeTrigger = (lastTriggeredAt?: string | null) => {
+  if (!lastTriggeredAt) {
+    return false;
+  }
+
+  const lastTimestamp = new Date(lastTriggeredAt).getTime();
+  if (Number.isNaN(lastTimestamp)) {
+    return false;
+  }
+
+  return Date.now() - lastTimestamp < CONFIRM_WINDOW_MS;
+};
+
+export const TriggerRunButton = ({ lastTriggeredAt }: TriggerRunButtonProps) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
   const handleClick = () => {
+    if (shouldConfirmBeforeTrigger(lastTriggeredAt)) {
+      const confirmed = window.confirm("查询是有成本的，一次可能会花费 3 刀左右，是否要继续？");
+      if (!confirmed) {
+        return;
+      }
+    }
+
     setMessage(null);
     startTransition(async () => {
       try {
