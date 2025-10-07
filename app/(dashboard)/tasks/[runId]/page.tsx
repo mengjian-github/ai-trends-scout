@@ -45,6 +45,22 @@ const extractStringArray = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 };
 
+const extractRecordedKeywords = (metadata: Record<string, unknown>): string[] => {
+  const summary = metadata.keyword_spikes;
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    return [];
+  }
+
+  const recorded = (summary as Record<string, unknown>).recorded_keywords;
+  if (!Array.isArray(recorded)) {
+    return [];
+  }
+
+  return recorded
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0);
+};
+
 const formatUSD = (value: number) =>
   `$${formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -78,6 +94,7 @@ const TaskRunDetailPage = async ({ params }: { params: Promise<{ runId: string }
   const timeframes = extractStringArray(run.metadata.timeframes);
   const markets = extractStringArray(run.metadata.markets);
   const lastCallbackAt = typeof run.metadata.last_callback_at === "string" ? run.metadata.last_callback_at : null;
+  const recordedKeywords = extractRecordedKeywords(run.metadata);
 
   return (
     <div className="space-y-6">
@@ -146,7 +163,7 @@ const TaskRunDetailPage = async ({ params }: { params: Promise<{ runId: string }
           {tasks.length === 0 ? (
             <p className="text-sm text-white/60">本次集合下暂无任务记录。</p>
           ) : (
-            <RunTasksTable runId={run.id} tasks={tasks} />
+            <RunTasksTable runId={run.id} tasks={tasks} recordedKeywords={recordedKeywords} />
           )}
         </CardContent>
       </Card>

@@ -91,6 +91,9 @@ const buildPrompt = (params: KeywordDemandRequest) => {
   );
   lines.push("Summarize the underlying user task in one concise sentence if you classify it as tool or unclear.");
   lines.push(
+    "Always respond in Simplified Chinese. The demand_summary and reason fields must be written in Simplified Chinese; avoid mixing English unless it is a proper noun."
+  );
+  lines.push(
     "Return strict JSON: {\"label\":\"tool|non_tool|unclear\",\"score\":number 0-1,\"demand_summary\":string,\"reason\":string}."
   );
 

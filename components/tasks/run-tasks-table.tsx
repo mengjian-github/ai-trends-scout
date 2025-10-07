@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+import { normalizeKeyword } from "@/lib/trends/utils";
 import { formatNumber } from "@/lib/utils";
 import type { RunTaskItem } from "@/types/tasks";
 
@@ -34,6 +35,79 @@ const subtleButtonClass =
 const paginationSelectClass =
   "rounded-md border border-white/10 bg-black/30 px-2 py-1 text-xs text-white focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400";
 
+type DemandAssessment = {
+  label: string | null;
+  score: number | null;
+  summary: string | null;
+  reason: string | null;
+};
+
+const extractDemandAssessment = (metadata: RunTaskItem["metadata"]): DemandAssessment | null => {
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const demand = (metadata as Record<string, unknown>).demand_assessment;
+  if (!demand || typeof demand !== "object" || Array.isArray(demand)) {
+    return null;
+  }
+
+  const { label, score, summary, reason } = demand as {
+    label?: unknown;
+    score?: unknown;
+    summary?: unknown;
+    reason?: unknown;
+  };
+
+  const summaryText = typeof summary === "string" ? summary.trim() : "";
+  const reasonText = typeof reason === "string" ? reason.trim() : "";
+
+  return {
+    label: typeof label === "string" ? label : null,
+    score: typeof score === "number" && Number.isFinite(score) ? score : null,
+    summary: summaryText.length > 0 ? summaryText : null,
+    reason: reasonText.length > 0 ? reasonText : null,
+  };
+};
+
+const renderDemandBadge = (assessment: DemandAssessment | null) => {
+  if (!assessment) {
+    return null;
+  }
+
+  const labelText = (() => {
+    if (assessment.label === "tool") {
+      return "工具需求";
+    }
+    if (assessment.label === "non_tool") {
+      return "非工具需求";
+    }
+    if (assessment.label === "unclear") {
+      return "待确认";
+    }
+    return null;
+  })();
+
+  if (!labelText) {
+    return null;
+  }
+
+  const toneClass = assessment.label === "tool"
+    ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30"
+    : assessment.label === "non_tool"
+    ? "bg-rose-500/10 text-rose-200 border border-rose-500/30"
+    : "bg-amber-500/10 text-amber-200 border border-amber-500/30";
+
+  const scoreText = assessment.score !== null ? ` · 可信度 ${assessment.score.toFixed(2)}` : "";
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${toneClass}`}>
+      {labelText}
+      {scoreText}
+    </span>
+  );
+};
+
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) {
     return "—";
@@ -48,10 +122,55 @@ const formatUSD = (value: number) =>
 type RunTasksTableProps = {
   runId: string;
   tasks: RunTaskItem[];
+  recordedKeywords: string[];
 };
 
-export const RunTasksTable = ({ runId, tasks }: RunTasksTableProps) => {
-  const total = tasks.length;
+export const RunTasksTable = ({ runId, tasks, recordedKeywords }: RunTasksTableProps) => {
+  const recordedKeywordSet = useMemo(() => {
+    if (!recordedKeywords || recordedKeywords.length === 0) {
+      return new Set<string>();
+    }
+
+    const set = new Set<string>();
+    for (const keyword of recordedKeywords) {
+      if (typeof keyword !== "string") {
+        continue;
+      }
+
+      const normalized = normalizeKeyword(keyword);
+      if (normalized) {
+        set.add(normalized);
+      }
+    }
+
+    return set;
+  }, [recordedKeywords]);
+
+  const sortedTasks = useMemo(() => {
+    if (tasks.length === 0) {
+      return [] as RunTaskItem[];
+    }
+
+    if (recordedKeywordSet.size === 0) {
+      return [...tasks];
+    }
+
+    const recordedList: RunTaskItem[] = [];
+    const others: RunTaskItem[] = [];
+
+    for (const task of tasks) {
+      const normalized = normalizeKeyword(task.keyword ?? "");
+      if (normalized && recordedKeywordSet.has(normalized)) {
+        recordedList.push(task);
+      } else {
+        others.push(task);
+      }
+    }
+
+    return [...recordedList, ...others];
+  }, [tasks, recordedKeywordSet]);
+
+  const total = sortedTasks.length;
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -59,7 +178,7 @@ export const RunTasksTable = ({ runId, tasks }: RunTasksTableProps) => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [tasks]);
+  }, [sortedTasks]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -69,8 +188,8 @@ export const RunTasksTable = ({ runId, tasks }: RunTasksTableProps) => {
 
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
-    return tasks.slice(startIndex, startIndex + pageSize);
-  }, [tasks, currentPage, pageSize]);
+    return sortedTasks.slice(startIndex, startIndex + pageSize);
+  }, [sortedTasks, currentPage, pageSize]);
 
   const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextSize = Number(event.target.value);
@@ -114,6 +233,8 @@ export const RunTasksTable = ({ runId, tasks }: RunTasksTableProps) => {
           <tbody>
             {paginatedTasks.map((task) => {
               const metadata = task.metadata;
+              const normalizedKeyword = normalizeKeyword(task.keyword ?? "");
+              const isRecorded = normalizedKeyword ? recordedKeywordSet.has(normalizedKeyword) : false;
               let sourceLabel = "根关键词";
               if (metadata?.source === "rising") {
                 sourceLabel = "扩展";
@@ -121,13 +242,34 @@ export const RunTasksTable = ({ runId, tasks }: RunTasksTableProps) => {
                 sourceLabel = "新闻种子";
               }
               const statusStyle = statusStyles[task.status] ?? "bg-white/10 text-white/80";
+              const demandAssessment = extractDemandAssessment(metadata);
+              const demandBadge = renderDemandBadge(demandAssessment);
+              const demandSummary = demandAssessment?.summary ?? null;
+              const demandReason = demandAssessment?.reason ?? null;
+              const rowClass = `border-b border-white/5 last:border-none${isRecorded ? " bg-emerald-500/5" : ""}`;
 
               return (
-                <tr key={task.taskId} className="border-b border-white/5 last:border-none">
+                <tr key={task.taskId} className={rowClass}>
                   <td className="py-3 pr-4 text-white">
                     <div className="font-medium">{task.keyword}</div>
+                    {(isRecorded || demandBadge) ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                        {isRecorded ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-200">
+                            新词入库
+                          </span>
+                        ) : null}
+                        {demandBadge}
+                      </div>
+                    ) : null}
+                    {demandSummary ? (
+                      <div className="mt-1 text-xs text-white/70">需求意图：{demandSummary}</div>
+                    ) : null}
+                    {demandReason ? (
+                      <div className="mt-1 text-[11px] text-white/50">判定依据：{demandReason}</div>
+                    ) : null}
                     {metadata?.root_label ? (
-                      <div className="text-xs text-white/50">{metadata.root_label}</div>
+                      <div className="mt-1 text-xs text-white/50">根关键词标签：{metadata.root_label}</div>
                     ) : null}
                   </td>
                   <td className="py-3 pr-4 text-white/70">{sourceLabel}</td>
@@ -195,4 +337,3 @@ export const RunTasksTable = ({ runId, tasks }: RunTasksTableProps) => {
     </div>
   );
 };
-
