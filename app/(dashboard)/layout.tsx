@@ -6,12 +6,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-[1200px] flex-col px-6 py-8">
         <header className="flex flex-col gap-6 pb-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs text-white/60">内部工具集</p>
-            <h1 className="mt-2 text-2xl font-semibold">AI 趋势侦察</h1>
-            <p className="mt-2 max-w-2xl text-sm text-white/60">
-              通过 Google 趋势与新闻信号监测主要市场中涌现的 AI 需求关键词。
-            </p>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold">AI 趋势侦察</h1>
+            <p className="text-sm text-white/60">内部工具 · 聚合热点关键词与信号</p>
           </div>
           <DashboardNav />
         </header>

@@ -1,4 +1,12 @@
-import "server-only";
+const ensureServerOnly = async () => {
+  try {
+    await import("server-only");
+  } catch {
+    // Ignore when running outside of the Next.js runtime (e.g. CLI scripts).
+  }
+};
+
+void ensureServerOnly();
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 
 let configured = false;

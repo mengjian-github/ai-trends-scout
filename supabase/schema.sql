@@ -160,6 +160,27 @@ create table if not exists ai_trends_tasks (
 create unique index if not exists ai_trends_tasks_task_id_idx on ai_trends_tasks (task_id);
 create index if not exists ai_trends_tasks_run_id_idx on ai_trends_tasks (run_id);
 
+create table if not exists game_keywords (
+  id uuid primary key default uuid_generate_v4(),
+  keyword text not null,
+  normalized_keyword text not null,
+  site_name text not null,
+  source_url text not null,
+  lang text not null default 'unknown',
+  last_seen_url text,
+  status text not null default 'accepted' check (status in ('accepted', 'filtered')),
+  filter_reason text,
+  filter_detail text,
+  inserted_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists game_keywords_unique_site_keyword_idx
+  on game_keywords (site_name, normalized_keyword);
+
+create index if not exists game_keywords_inserted_idx
+  on game_keywords (inserted_at desc);
+
 create or replace function prune_ai_trends_tasks(retention_days integer default 7)
 returns integer
 language plpgsql

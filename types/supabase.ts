@@ -366,6 +366,50 @@ export type Database = {
           updated_at?: string;
         };
       };
+      game_keywords: {
+        Row: {
+          id: string;
+          keyword: string;
+          normalized_keyword: string;
+          site_name: string;
+          source_url: string;
+          lang: string;
+          last_seen_url: string | null;
+          status: string;
+          filter_reason: string | null;
+          filter_detail: string | null;
+          inserted_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          keyword: string;
+          normalized_keyword: string;
+          site_name: string;
+          source_url: string;
+          lang?: string;
+          last_seen_url?: string | null;
+          status?: string;
+          filter_reason?: string | null;
+          filter_detail?: string | null;
+          inserted_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          keyword?: string;
+          normalized_keyword?: string;
+          site_name?: string;
+          source_url?: string;
+          lang?: string;
+          last_seen_url?: string | null;
+          status?: string;
+          filter_reason?: string | null;
+          filter_detail?: string | null;
+          inserted_at?: string;
+          updated_at?: string;
+        };
+      };
     };
   };
 };

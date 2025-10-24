@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BarChart3, BrainCircuit, ClipboardList, LogOut, Newspaper, Settings, Sparkles } from "lucide-react";
+import { BarChart3, BrainCircuit, ClipboardList, Gamepad2, LogOut, Newspaper, Settings, Sparkles } from "lucide-react";
 
 const navItems = [
   { href: "/overview", label: "概览", icon: BarChart3 },
   { href: "/tasks", label: "任务", icon: ClipboardList },
   { href: "/keywords", label: "关键词", icon: BrainCircuit },
+  { href: "/game-keywords", label: "游戏关键词", icon: Gamepad2 },
   { href: "/news", label: "新闻", icon: Newspaper },
   { href: "/candidates", label: "候选词根", icon: Sparkles },
   { href: "/settings", label: "设置", icon: Settings },
@@ -18,7 +19,7 @@ export const DashboardNav = () => {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-2 text-sm">
+    <nav className="flex flex-wrap items-center gap-1.5 text-sm">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
@@ -28,7 +29,7 @@ export const DashboardNav = () => {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-2 transition-all",
+              "flex items-center gap-2 rounded-full px-3 py-1.5 transition-all",
               isActive
                 ? "bg-white text-black shadow"
                 : "bg-transparent text-white/70 hover:bg-white/10 hover:text-white"

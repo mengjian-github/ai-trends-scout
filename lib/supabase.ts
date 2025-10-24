@@ -1,5 +1,5 @@
 import "@/lib/server-proxy";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type PostgrestError, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/supabase";
 import { env } from "./env";
 import { NEW_KEYWORD_MAX_AGE_MS } from "@/lib/trends/constants";
@@ -36,6 +36,9 @@ export type NewsItemRow = Database["public"]["Tables"]["ai_trends_news"]["Row"];
 export type CandidateRootRow = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Row"];
 export type CandidateRootInsert = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Insert"];
 export type CandidateRootUpdate = Database["public"]["Tables"]["ai_trends_candidate_roots"]["Update"];
+export type GameKeywordRow = Database["public"]["Tables"]["game_keywords"]["Row"];
+export type GameKeywordInsert = Database["public"]["Tables"]["game_keywords"]["Insert"];
+export type GameKeywordUpdate = Database["public"]["Tables"]["game_keywords"]["Update"];
 
 export const deleteAllTrendKeywords = async (): Promise<number> => {
   const client = getSupabaseAdmin();
@@ -654,4 +657,328 @@ export const insertTrendEvent = async (
   }
 
   return data ?? null;
+};
+
+const normalizeGameKeyword = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/https?:\/\//g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const normalizeGameKeywordStatus = (value?: string | null): "accepted" | "filtered" => {
+  if (!value) {
+    return "accepted";
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "filtered" ? "filtered" : "accepted";
+};
+
+const trimValue = (value: string | null | undefined) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+export type GameKeywordUpsertChunk = {
+  index: number;
+  total: number;
+  chunkSize: number;
+  inserted: number;
+  updated: number;
+  error?: {
+    reason: string;
+    details?: string | null;
+    code?: string | null;
+    hint?: string | null;
+  };
+};
+
+export const upsertGameKeywords = async (
+  records: Array<
+    Omit<GameKeywordInsert, "normalized_keyword" | "inserted_at" | "updated_at"> & {
+      normalized_keyword?: string;
+      inserted_at?: string;
+      updated_at?: string;
+    }
+  >,
+  onChunk?: (chunk: GameKeywordUpsertChunk) => void
+): Promise<{ inserted: number; updated: number; rows: GameKeywordRow[] }> => {
+  if (records.length === 0) {
+    return { inserted: 0, updated: 0, rows: [] };
+  }
+
+  const client = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
+
+  const payloadPrep = records.map((record) => {
+    const siteName = record.site_name.trim();
+    const normalizedKeyword = record.normalized_keyword
+      ? normalizeGameKeyword(record.normalized_keyword)
+      : normalizeGameKeyword(record.keyword);
+    const status = normalizeGameKeywordStatus((record as GameKeywordInsert).status);
+    const filterReason = trimValue((record as GameKeywordInsert).filter_reason ?? null);
+    const filterDetail = trimValue((record as GameKeywordInsert).filter_detail ?? null);
+
+    return {
+      keyword: record.keyword.trim(),
+      normalized_keyword: normalizedKeyword,
+      site_name: siteName,
+      source_url: record.source_url.trim(),
+      lang: record.lang ? record.lang.trim() : "unknown",
+      last_seen_url: trimValue(record.last_seen_url ?? record.source_url),
+      status,
+      filter_reason: status === "filtered" ? filterReason : null,
+      filter_detail: status === "filtered" ? filterDetail : null,
+      inserted_at: record.inserted_at ?? nowIso,
+      updated_at: record.updated_at ?? nowIso,
+    } satisfies GameKeywordInsert;
+  });
+
+const existingMap = new Map<string, { inserted_at: string }>();
+const SITE_LOOKUP_CHUNK = 75;
+const SITE_LOOKUP_MAX_QUERY_LENGTH = 6000;
+
+const getQueryLength = (values: string[]) => {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  let length = 0;
+  for (let index = 0; index < values.length; index++) {
+    length += encodeURIComponent(values[index]).length;
+    if (index > 0) {
+      length += 1; // comma
+    }
+  }
+  return length;
+};
+
+const siteBuckets = payloadPrep.reduce<Record<string, GameKeywordInsert[]>>((acc, item) => {
+  const bucket = acc[item.site_name] ?? [];
+  bucket.push(item);
+  acc[item.site_name] = bucket;
+    return acc;
+  }, {});
+
+const fetchExistingRows = async (siteName: string, values: string[]) => {
+  if (values.length === 0) {
+    return;
+  }
+
+  const { data, error } = await client
+    .from("game_keywords")
+    .select("normalized_keyword, inserted_at")
+    .eq("site_name", siteName)
+    .in("normalized_keyword", values);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data as Array<Pick<GameKeywordRow, "normalized_keyword" | "inserted_at">> | null) ?? [];
+  rows.forEach((row) => {
+    const key = `${siteName}::${row.normalized_keyword}`;
+    existingMap.set(key, { inserted_at: row.inserted_at });
+  });
+};
+
+  for (const [siteName, entries] of Object.entries(siteBuckets)) {
+    const normalizedList = entries.map((entry) => entry.normalized_keyword);
+    for (let index = 0; index < normalizedList.length; ) {
+      let end = Math.min(index + SITE_LOOKUP_CHUNK, normalizedList.length);
+      let slice = normalizedList.slice(index, end);
+
+      while (slice.length > 1 && getQueryLength(slice) > SITE_LOOKUP_MAX_QUERY_LENGTH) {
+        end = index + Math.max(1, Math.floor(slice.length / 2));
+        slice = normalizedList.slice(index, end);
+      }
+
+      await fetchExistingRows(siteName, slice);
+      index = end;
+    }
+  }
+
+  let insertedCount = 0;
+
+  const payloadEntries = payloadPrep.map((item) => {
+    const key = `${item.site_name}::${item.normalized_keyword}`;
+    const existing = existingMap.get(key);
+
+    if (existing) {
+      return {
+        record: {
+          ...item,
+          inserted_at: existing.inserted_at,
+          updated_at: nowIso,
+        } satisfies GameKeywordInsert,
+        isNew: false,
+      };
+    }
+
+    insertedCount += 1;
+    return {
+      record: item,
+      isNew: true,
+    };
+  });
+
+  const payload = payloadEntries.map((entry) => entry.record);
+
+  const UPSERT_CHUNK_SIZE = 50;
+  const rows: GameKeywordRow[] = [];
+  const totalChunks = Math.ceil(payload.length / UPSERT_CHUNK_SIZE) || 1;
+
+  for (let index = 0; index < payload.length; index += UPSERT_CHUNK_SIZE) {
+    const entrySlice = payloadEntries.slice(index, index + UPSERT_CHUNK_SIZE);
+    if (entrySlice.length === 0) {
+      continue;
+    }
+
+    const chunkRecords = entrySlice.map((entry) => entry.record);
+    const chunkInserted = entrySlice.filter((entry) => entry.isNew).length;
+    const chunkUpdated = entrySlice.length - chunkInserted;
+    const chunkIndex = Math.floor(index / UPSERT_CHUNK_SIZE) + 1;
+
+    try {
+      const { data, error } = await (client.from("game_keywords") as any)
+        .upsert(chunkRecords as any, { onConflict: "site_name,normalized_keyword" })
+        .select("*");
+
+      if (error) {
+        throw error;
+      }
+
+      if (Array.isArray(data)) {
+        rows.push(...(data as GameKeywordRow[]));
+      }
+
+      onChunk?.({
+        index: chunkIndex,
+        total: totalChunks,
+        chunkSize: entrySlice.length,
+        inserted: chunkInserted,
+        updated: chunkUpdated,
+      });
+    } catch (error) {
+      const pgError = error as PostgrestError;
+      const reason = pgError?.message ?? (error as Error).message ?? "unknown error";
+      const sampleKeywords = entrySlice
+        .slice(0, 5)
+        .map((entry) => `${entry.record.site_name}:${entry.record.keyword}`);
+
+      console.error("[game-refresh] chunk upsert failed", {
+        chunkIndex,
+        totalChunks,
+        chunkSize: entrySlice.length,
+        sampleSite: entrySlice[0]?.record.site_name,
+        sampleKeywords,
+        reason,
+        details: pgError?.details,
+        code: pgError?.code,
+        hint: pgError?.hint,
+        raw: error,
+      });
+
+      onChunk?.({
+        index: chunkIndex,
+        total: totalChunks,
+        chunkSize: entrySlice.length,
+        inserted: chunkInserted,
+        updated: chunkUpdated,
+        error: {
+          reason,
+          details: pgError?.details,
+          code: pgError?.code,
+          hint: pgError?.hint,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  const updatedCount = payload.length - insertedCount;
+
+  return { inserted: insertedCount, updated: updatedCount, rows };
+};
+
+export const getLatestGameKeywords = async (
+  params: { limit?: number; status?: "accepted" | "filtered" } = {}
+): Promise<GameKeywordRow[]> => {
+  const client = getSupabaseAdmin();
+  const { limit = 500, status } = params;
+
+  let query = client
+    .from("game_keywords")
+    .select("*")
+    .order("inserted_at", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as GameKeywordRow[];
+};
+
+export const getGameKeywordStats = async (): Promise<{
+  total: number;
+  accepted: number;
+  filtered: number;
+  lastAcceptedAt: string | null;
+  lastFilteredAt: string | null;
+}> => {
+  const client = getSupabaseAdmin();
+  const [
+    { count: acceptedCount, error: acceptedError },
+    { count: filteredCount, error: filteredError },
+    { data: latestAcceptedData, error: latestAcceptedError },
+    { data: latestFilteredData, error: latestFilteredError },
+  ] = await Promise.all([
+    client.from("game_keywords").select("id", { count: "exact", head: true }).eq("status", "accepted"),
+    client.from("game_keywords").select("id", { count: "exact", head: true }).eq("status", "filtered"),
+    client
+      .from("game_keywords")
+      .select("inserted_at")
+      .eq("status", "accepted")
+      .order("inserted_at", { ascending: false })
+      .limit(1),
+    client
+      .from("game_keywords")
+      .select("updated_at")
+      .eq("status", "filtered")
+      .order("updated_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  if (acceptedError) throw acceptedError;
+  if (filteredError) throw filteredError;
+  if (latestAcceptedError) throw latestAcceptedError;
+  if (latestFilteredError) throw latestFilteredError;
+
+  const latestAcceptedRows = (latestAcceptedData as Array<Pick<GameKeywordRow, "inserted_at">> | null) ?? [];
+  const latestFilteredRows = (latestFilteredData as Array<Pick<GameKeywordRow, "updated_at">> | null) ?? [];
+
+  const accepted = typeof acceptedCount === "number" ? acceptedCount : 0;
+  const filtered = typeof filteredCount === "number" ? filteredCount : 0;
+
+  return {
+    total: accepted + filtered,
+    accepted,
+    filtered,
+    lastAcceptedAt: latestAcceptedRows.length > 0 ? latestAcceptedRows[0].inserted_at ?? null : null,
+    lastFilteredAt: latestFilteredRows.length > 0 ? latestFilteredRows[0].updated_at ?? null : null,
+  };
 };

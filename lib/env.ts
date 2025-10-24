@@ -13,6 +13,29 @@ const DEFAULT_NEWS_FEEDS = [
   "https://decrypt.co/feed/ai",
 ];
 
+const DEFAULT_GAME_SITEMAPS = [
+  "https://www.crazygames.com/sitemap",
+  "https://www.onlinegames.io/sitemap.xml",
+  "https://geometrydashlitepc.io/sitemap.xml",
+  "https://www.truckgamesparking.com/game-sitemap.xml",
+  "https://www.arkadium.com/sitemap.xml",
+  "https://www.minijuegos.com/sitemap-games-3.xml",
+  "https://geometrygames.io/sitemap.xml",
+  "https://geometrygame.org/sitemap.xml",
+  "https://geometry-lite.io/sitemap.xml",
+  "https://now.gg/sitemap.xml",
+  "https://iogames.onl/sitemap.xml",
+  "https://www.freegames.com/sitemap/games_1.xml",
+  "https://www.coolmathgames.com/sitemap.xml",
+  "https://www.friv.com/sitemap.xml",
+  "https://armorgames.com/sitemap",
+  "https://bloxd.io/sitemap.xml",
+  "https://lagged.com/sitemap.xml",
+  "https://gamemonetize.com/sitemap.xml",
+  "https://gamiary.com/sitemap.xml",
+  "https://crazycattle3d.io/sitemap.xml",
+];
+
 const baseSchema = z
   .object({
     NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
@@ -58,6 +81,7 @@ const baseSchema = z
     AI_TRENDS_CANDIDATE_MAX_TOTAL: z.string().optional(),
     AI_TRENDS_CANDIDATE_MAX_PER_SOURCE: z.string().optional(),
     AI_TRENDS_NEWS_CANDIDATES_PER_ITEM: z.string().optional(),
+    GAME_SITEMAP_SOURCES: z.string().optional(),
   })
   .transform((values) => ({
     ...values,
@@ -119,6 +143,8 @@ const baseSchema = z
       const parsed = Number.parseInt(raw, 10);
       return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     })(),
+    GAME_SITEMAP_SOURCES_LIST:
+      values.GAME_SITEMAP_SOURCES?.split(",").map((item) => item.trim()).filter(Boolean) ?? DEFAULT_GAME_SITEMAPS,
   }));
 
 export type AppEnv = z.infer<typeof baseSchema>;
@@ -161,3 +187,4 @@ export const candidateLlmBatchSize = env.AI_TRENDS_CANDIDATE_LLM_BATCH_NUMBER ??
 export const candidateMaxTotal = env.AI_TRENDS_CANDIDATE_MAX_TOTAL_NUMBER ?? 120;
 export const candidateMaxPerSource = env.AI_TRENDS_CANDIDATE_MAX_PER_SOURCE_NUMBER ?? 40;
 export const newsCandidateMaxPerItem = env.AI_TRENDS_NEWS_CANDIDATES_PER_ITEM_NUMBER ?? 5;
+export const gameSitemapSources = env.GAME_SITEMAP_SOURCES_LIST as string[];
